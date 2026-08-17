@@ -1,0 +1,19 @@
+# Node
+node_modules/
+dist/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Data & secrets
+*.db
+*.sqlite3
+.env
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/

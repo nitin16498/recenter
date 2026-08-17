@@ -1,13 +1,19 @@
-"""Recenter backend — FastAPI app (REC-6 skeleton).
+"""Recenter backend — FastAPI app.
 
 Endpoints:
-- GET /api/health : liveness check, used by the frontend to prove wiring.
-- POST /api/chat  : stub echo endpoint; replaced by the LangGraph supervisor in REC-9.
+- GET  /api/health   : liveness check.
+- GET  /api/messages : chat history for the UI (REC-8).
+- POST /api/chat     : persist user message + assistant reply (stub until the
+                       LangGraph supervisor lands in REC-9).
 """
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 from starlette.middleware.cors import CORSMiddleware
+
+from app.db import get_db, init_db
+from app.models import Message
 
 app = FastAPI(title="Recenter", version="0.1.0")
 
@@ -22,8 +28,27 @@ app.add_middleware(
 )
 
 
-class ChatMessage(BaseModel):
+@app.on_event("startup")
+def on_startup() -> None:
+    init_db()
+
+
+class ChatRequest(BaseModel):
     content: str
+    thread_id: str = "main"
+
+
+class MessageOut(BaseModel):
+    id: int
+    role: str
+    content: str
+    created_at: str
+
+
+def to_out(m: Message) -> MessageOut:
+    return MessageOut(
+        id=m.id, role=m.role, content=m.content, created_at=m.created_at.isoformat()
+    )
 
 
 @app.get("/api/health")
@@ -31,7 +56,33 @@ def health() -> dict:
     return {"status": "ok"}
 
 
+@app.get("/api/messages")
+def list_messages(thread_id: str = "main", db: Session = Depends(get_db)) -> list[MessageOut]:
+    messages = (
+        db.query(Message)
+        .filter(Message.thread_id == thread_id)
+        .order_by(Message.created_at, Message.id)
+        .all()
+    )
+    return [to_out(m) for m in messages]
+
+
 @app.post("/api/chat")
-def chat(message: ChatMessage) -> dict:
-    # Stub: echoes until the LangGraph supervisor (REC-9) takes over.
-    return {"role": "assistant", "content": f"(stub) You said: {message.content}"}
+def chat(req: ChatRequest, db: Session = Depends(get_db)) -> MessageOut:
+    user_msg = Message(thread_id=req.thread_id, role="user", content=req.content)
+    db.add(user_msg)
+    db.commit()
+
+    # Stub reply — replaced by the LangGraph supervisor in REC-9.
+    reply = Message(
+        thread_id=req.thread_id,
+        role="assistant",
+        content=(
+            "I hear you. (I'm a stub until REC-9 — soon I'll actually think "
+            "about what you said.)"
+        ),
+    )
+    db.add(reply)
+    db.commit()
+    db.refresh(reply)
+    return to_out(reply)

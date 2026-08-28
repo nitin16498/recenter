@@ -7,13 +7,17 @@ Endpoints:
                        LangGraph supervisor lands in REC-9).
 """
 
+from dotenv import load_dotenv
+
+load_dotenv()  # ANTHROPIC_API_KEY etc. from backend/.env — before agent imports
+
+from app.agent import run_agent
+from app.db import get_db, init_db
+from app.models import Message
 from fastapi import Depends, FastAPI
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from starlette.middleware.cors import CORSMiddleware
-
-from app.db import get_db, init_db
-from app.models import Message
 
 app = FastAPI(title="Recenter", version="0.1.0")
 
@@ -73,15 +77,17 @@ def chat(req: ChatRequest, db: Session = Depends(get_db)) -> MessageOut:
     db.add(user_msg)
     db.commit()
 
-    # Stub reply — replaced by the LangGraph supervisor in REC-9.
-    reply = Message(
-        thread_id=req.thread_id,
-        role="assistant",
-        content=(
-            "I hear you. (I'm a stub until REC-9 — soon I'll actually think "
-            "about what you said.)"
-        ),
-    )
+    # REC-9: the LangGraph supervisor routes to day_planner / habit_coach /
+    # email_triage. The checkpointer holds conversation memory per thread.
+    try:
+        reply_text = run_agent(req.content, thread_id=req.thread_id)
+    except Exception as exc:  # missing/invalid API key, network, etc.
+        reply_text = (
+            "I couldn't reach my brain just now — check that ANTHROPIC_API_KEY "
+            f"is set in backend/.env and try again. ({type(exc).__name__})"
+        )
+
+    reply = Message(thread_id=req.thread_id, role="assistant", content=reply_text)
     db.add(reply)
     db.commit()
     db.refresh(reply)

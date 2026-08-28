@@ -1,3 +1,25 @@
-fastapi>=0.111
-uvicorn[standard]>=0.30
-sqlalchemy>=2.0
+# Recenter backend — direct dependencies.
+#
+# REQUIRES PYTHON 3.10+. app/models.py uses PEP 604 union syntax
+# (`Mapped[int | None]`), which SQLAlchemy evaluates at import time.
+# On Python 3.9 the app fails to start with:
+#   TypeError: unsupported operand type(s) for |: 'type' and 'NoneType'
+#
+# Install:  pip install -r requirements.txt
+# For a byte-identical environment, use requirements.lock.txt instead.
+
+fastapi==0.141.1
+uvicorn[standard]==0.52.3
+sqlalchemy==2.0.52
+
+# Imported directly by app code (they also arrive as FastAPI dependencies,
+# but anything we import by name gets declared and pinned here).
+pydantic==2.13.4
+starlette==1.6.0
+
+# Agent (REC-9). Ranges, not pins — after `pip install -r requirements.txt`,
+# refresh the lock: `pip freeze > requirements.lock.txt`.
+langgraph>=0.4
+langgraph-checkpoint-sqlite>=2.0
+langchain-anthropic>=0.3
+python-dotenv>=1.0

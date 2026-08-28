@@ -10,6 +10,8 @@ venv/
 
 # Data & secrets
 *.db
+*.db-shm
+*.db-wal
 *.sqlite3
 .env
 

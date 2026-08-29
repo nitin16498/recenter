@@ -21,5 +21,7 @@ starlette==1.6.0
 # refresh the lock: `pip freeze > requirements.lock.txt`.
 langgraph>=0.4
 langgraph-checkpoint-sqlite>=2.0
+langchain>=0.3            # init_chat_model — provider-agnostic factory (REC-25)
 langchain-anthropic>=0.3
+langchain-openai>=0.2     # enables openai:* model specs
 python-dotenv>=1.0

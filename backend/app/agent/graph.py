@@ -14,8 +14,9 @@ The core LangGraph ideas, mapped to this file:
   recent-window conversation memory across HTTP requests (see REC-22 design:
   this is context layer 1 of 3).
 
-Env: ANTHROPIC_API_KEY required. Models overridable via RECENTER_MODEL /
-RECENTER_ROUTER_MODEL.
+Models are provider-agnostic (REC-25): configured as "provider:model" strings
+via RECENTER_MODEL / RECENTER_ROUTER_MODEL and built in app/agent/llm.py —
+this file never touches a provider-specific class.
 """
 
 import os
@@ -23,14 +24,11 @@ import sqlite3
 from functools import lru_cache
 from typing import Literal
 
-from langchain_anthropic import ChatAnthropic
+from app.agent.llm import responder_model, router_model
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, MessagesState, StateGraph
 from pydantic import BaseModel, Field
-
-RESPONDER_MODEL = os.getenv("RECENTER_MODEL", "claude-sonnet-4-5")
-ROUTER_MODEL = os.getenv("RECENTER_ROUTER_MODEL", "claude-haiku-4-5")
 
 CHECKPOINT_DB = os.getenv("RECENTER_CHECKPOINT_DB", "checkpoints.db")
 
@@ -74,18 +72,8 @@ habit when resistance is high, never miss twice, no guilt trips.
 Keep replies under 120 words."""
 
 
-@lru_cache(maxsize=1)
-def _responder() -> ChatAnthropic:
-    return ChatAnthropic(model_name=RESPONDER_MODEL, timeout=None, stop=None)
-
-
-@lru_cache(maxsize=1)
-def _router() -> ChatAnthropic:
-    return ChatAnthropic(model_name=ROUTER_MODEL, timeout=None, stop=None)
-
-
 def supervisor(state: AgentState) -> dict:
-    raw_decision = _router().with_structured_output(Route).invoke(
+    raw_decision = router_model().with_structured_output(Route).invoke(
         [{"role": "system", "content": ROUTER_SYSTEM}, *state["messages"]]
     )
     decision = (
@@ -101,14 +89,14 @@ def route_from_supervisor(state: AgentState) -> str:
 
 
 def day_planner(state: AgentState) -> dict:
-    reply = _responder().invoke(
+    reply = responder_model().invoke(
         [{"role": "system", "content": PLANNER_SYSTEM}, *state["messages"]]
     )
     return {"messages": [reply]}
 
 
 def habit_coach(state: AgentState) -> dict:
-    reply = _responder().invoke(
+    reply = responder_model().invoke(
         [{"role": "system", "content": COACH_SYSTEM}, *state["messages"]]
     )
     return {"messages": [reply]}

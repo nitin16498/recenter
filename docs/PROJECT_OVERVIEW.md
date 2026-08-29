@@ -31,7 +31,8 @@ V1 is single-user on localhost. SaaS later.
 | REC-6 | App skeleton: React+Vite shell, sidebar nav, FastAPI backend, wiring | Done |
 | REC-7 | DB schema: all core tables (see below) | Done |
 | REC-8 | Real chat: persisted messages, history, composer | Done |
-| REC-9 | LangGraph supervisor + stub subgraphs | Built, **needs commit** |
+| REC-9 | LangGraph supervisor + stub subgraphs | Done |
+| REC-25 | Provider-agnostic model config (any LangChain provider) | Done — verified live on `openai:*` |
 
 Everything else (REC-10..24) is backlog: real planner logic, coach persona from
 the cheat sheets, habit occurrences engine, Gmail, memory extraction, research node.
@@ -112,6 +113,11 @@ flowchart TD
 
     CP[("checkpoints.db<br/>SqliteSaver")] -.->|"loads + saves state<br/>per thread_id"| agent
 ```
+
+*Model names in the diagram are the defaults. Since REC-25, models are
+provider-agnostic: `RECENTER_MODEL` / `RECENTER_ROUTER_MODEL` take
+`provider:model` strings (e.g. `openai:gpt-4o`) built by `agent/llm.py` —
+no node code knows which provider it's talking to.*
 
 ### The pieces
 

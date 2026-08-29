@@ -51,9 +51,25 @@ python -m app.db                           # create SQLite tables
 python -m app.seed                         # optional: sample identities/habits/tasks
 ```
 
-> The agent needs `ANTHROPIC_API_KEY` in `backend/.env` (gitignored). Without it
-> the app runs but every chat reply is the "couldn't reach my brain" fallback.
-> Optional LangSmith tracing vars are documented in `.env.example`.
+> The agent needs an API key in `backend/.env` (gitignored). Without one the app
+> runs but every chat reply is the "couldn't reach my brain" fallback.
+>
+> Which key depends on the provider you pick. Since REC-25 the models are
+> provider-agnostic: `RECENTER_MODEL` and `RECENTER_ROUTER_MODEL` take
+> `provider:model` strings and are built through `app/agent/llm.py`. Defaults are
+> `anthropic:claude-sonnet-4-5` (responder) and `anthropic:claude-haiku-4-5`
+> (router), so `ANTHROPIC_API_KEY` alone is enough out of the box. To run on
+> OpenAI instead, set `OPENAI_API_KEY` and add to `.env`:
+>
+> ```
+> RECENTER_MODEL=openai:gpt-4o
+> RECENTER_ROUTER_MODEL=openai:gpt-4o-mini
+> ```
+>
+> That is the whole switch — no code change, since no node imports a provider
+> class. Any LangChain provider works if its integration package is installed
+> (anthropic and openai both ship in `requirements.txt`). Optional LangSmith
+> tracing vars are documented in `.env.example`.
 
 ```bash
 # Frontend
@@ -182,6 +198,18 @@ The backend isn't running, or isn't on 8000. Confirm with
 
 **`ModuleNotFoundError: No module named 'app'`**
 Run uvicorn from the `backend/` directory, not from the repo root or `backend/app/`.
+
+**`ModuleNotFoundError: No module named 'langchain'`** (or `langchain_openai`)
+Your venv is missing the agent stack — `langchain` provides `init_chat_model`,
+which `app/agent/llm.py` imports at startup, so the backend cannot boot without
+it. Reinstall from the declared set:
+
+```bash
+cd backend && source .venv/bin/activate && pip install -r requirements.txt
+```
+
+Verify with `pip list | grep -i langchain` — you want `langchain`,
+`langchain-core`, `langchain-anthropic`, and `langchain-openai` all present.
 
 **Want a clean database?**
 `recenter.db` is gitignored and recreated on startup:

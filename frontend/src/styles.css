@@ -108,7 +108,7 @@ body {
   font-size: 15px;
 }
 
-.theme-toggle {
+.toggle.theme-toggle {
   margin-top: auto;
   padding: 9px 12px;
   font-size: 14px;
@@ -289,7 +289,6 @@ body {
 
 /* Board (REC-27) */
 .board-page {
-  flex-direction: row;
   min-height: 0;
 }
 
@@ -514,8 +513,8 @@ body {
   font-weight: 400;
 }
 
-.task-card.selected {
-  box-shadow: 0 0 0 2px var(--accent-border);
+.task-card.expanded {
+  visibility: hidden;
 }
 
 .task-card.habit {
@@ -546,47 +545,127 @@ body {
   color: var(--accent);
 }
 
-/* Task detail panel (REC-27, reused by REC-11) */
-.task-panel {
-  width: 340px;
-  flex-shrink: 0;
-  border-left: 1px solid var(--border);
-  background: var(--bg);
+/* Task detail modal (REC-27, reused by REC-11) */
+.modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
   display: flex;
-  flex-direction: column;
-  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
 }
 
-.task-panel-header {
+.modal-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.task-modal {
+  position: relative;
+  width: min(620px, 100%);
+  max-height: 86vh;
+  display: flex;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-lg);
+  transform-origin: top left;
+  outline: none;
+}
+
+.task-modal-content {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 20px 24px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.task-modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
-  color: var(--text-secondary);
+  gap: 12px;
 }
 
-.task-panel-close {
+.task-modal-crumb {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.task-modal-close {
   border: none;
   background: none;
-  font-size: 18px;
+  font-size: 22px;
   line-height: 1;
   color: var(--text-muted);
   cursor: pointer;
+  padding: 0 2px;
 }
 
-.task-panel-close:hover {
+.task-modal-close:hover {
   color: var(--text);
 }
 
-.task-panel-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+.task-modal-title {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  padding: 4px 8px;
+  margin: -4px -8px 0;
+  font-size: 20px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--text);
+  outline: none;
+}
+
+.task-modal-title:hover {
+  border-color: var(--border);
+}
+
+.task-modal-title:focus {
+  border-color: var(--accent);
+  background: var(--bg);
+}
+
+.status-pick {
+  display: inline-flex;
+  align-self: flex-start;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.status-pick-item {
+  border: none;
+  background: none;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.status-pick-item + .status-pick-item {
+  border-left: 1px solid var(--border);
+}
+
+.status-pick-item:hover {
+  background: var(--bg);
+}
+
+.status-pick-item.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 500;
 }
 
 .field {
@@ -598,11 +677,16 @@ body {
 
 .field-row {
   display: flex;
-  gap: 10px;
+  gap: 12px;
 }
 
-.field-row .field {
+.field-grow {
   flex: 1;
+}
+
+.field-narrow {
+  width: 120px;
+  flex-shrink: 0;
 }
 
 .field-label {
@@ -612,11 +696,11 @@ body {
 
 .field-input {
   width: 100%;
-  background: var(--surface);
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 13px;
+  padding: 9px 11px;
+  font-size: 14px;
   font-family: inherit;
   color: var(--text);
   outline: none;
@@ -631,17 +715,21 @@ body {
   line-height: 1.5;
 }
 
-.field-static {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.task-panel-footer {
-  margin-top: auto;
+.task-modal-footer {
   font-size: 11px;
   color: var(--text-muted);
 }
 
-.task-panel-error {
+.task-modal-error {
   color: var(--danger);
+}
+
+@media (max-width: 560px) {
+  .field-row {
+    flex-direction: column;
+  }
+
+  .field-narrow {
+    width: auto;
+  }
 }

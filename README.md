@@ -232,7 +232,8 @@ frontend/src/main.jsx           React entry point
 frontend/src/App.jsx            app shell: sidebar nav + routes
 frontend/src/pages/Coach.jsx    chat UI
 frontend/src/pages/Board.jsx    kanban board: filters, drag to change status
-frontend/src/components/TaskDetailPanel.jsx  reusable task editor (Board now, chat cards in REC-11)
+frontend/src/components/TaskDetailModal.jsx  reusable task editor modal (Board now, chat cards in REC-11)
+frontend/src/theme.js           light/dark theme hook (sidebar toggle)
 frontend/src/tasks.js           shared task helpers: status labels, patchTask()
 frontend/src/pages/Placeholder.jsx  stubs for Today/Identity/Progress
 frontend/vite.config.js         dev server + /api proxy to :8000

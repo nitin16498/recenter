@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import TaskDetailPanel from '../components/TaskDetailPanel.jsx'
+import TaskDetailModal from '../components/TaskDetailModal.jsx'
 import { STATUSES, STATUS_LABELS, patchTask } from '../tasks.js'
 
 // REC-27: kanban board. Tasks come from /api/board; dragging a card between
-// columns PATCHes its status, clicking one opens the detail panel.
+// columns PATCHes its status, clicking one expands it into the detail modal.
 //
 // Habit cards (kind === 'habit') are stubbed: the API returns tasks only until
 // habit occurrences ship, but the toggle and card style are in place.
@@ -147,7 +147,7 @@ export default function Board() {
                   <TaskCard
                     key={t.id}
                     task={t}
-                    selected={t.id === selectedId}
+                    expanded={t.id === selectedId}
                     onClick={() => setSelectedId(t.id)}
                   />
                 ))}
@@ -159,10 +159,13 @@ export default function Board() {
       </div>
 
       {selected && (
-        <TaskDetailPanel
+        <TaskDetailModal
           task={selected}
           onClose={() => setSelectedId(null)}
           onSaved={replaceTask}
+          getOriginRect={() =>
+            document.querySelector(`[data-task-id="${selected.id}"]`)?.getBoundingClientRect()
+          }
         />
       )}
     </div>
@@ -177,7 +180,7 @@ function Chip({ active, onClick, children }) {
   )
 }
 
-function TaskCard({ task, selected, onClick }) {
+function TaskCard({ task, expanded, onClick }) {
   if (task.kind === 'habit') {
     return (
       <div className="task-card habit">
@@ -194,7 +197,8 @@ function TaskCard({ task, selected, onClick }) {
 
   return (
     <div
-      className={`task-card ${task.status}${selected ? ' selected' : ''}`}
+      className={`task-card ${task.status}${expanded ? ' expanded' : ''}`}
+      data-task-id={task.id}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData('text/plain', String(task.id))

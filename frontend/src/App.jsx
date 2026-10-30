@@ -1,4 +1,5 @@
 import { NavLink, Routes, Route } from 'react-router-dom'
+import Board from './pages/Board.jsx'
 import Coach from './pages/Coach.jsx'
 import Placeholder from './pages/Placeholder.jsx'
 
@@ -8,6 +9,7 @@ import Placeholder from './pages/Placeholder.jsx'
 const NAV_ITEMS = [
   { to: '/', label: 'Coach', icon: '💬', end: true },
   { to: '/today', label: 'Today', icon: '☀️' },
+  { to: '/board', label: 'Board', icon: '🗂️' },
   { to: '/identity', label: 'Identity', icon: '🎯' },
   { to: '/progress', label: 'Progress', icon: '📈' },
 ]
@@ -51,6 +53,7 @@ export default function App() {
               />
             }
           />
+          <Route path="/board" element={<Board />} />
           <Route
             path="/identity"
             element={

@@ -8,6 +8,9 @@
   --text-muted: #a3a099;
   --accent: #185fa5;
   --accent-bg: #e6f1fb;
+  --accent-border: #85b7eb;
+  --accent-fill: #378add;
+  --border-strong: #d3cfc7;
   --radius: 10px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
@@ -245,4 +248,359 @@ body {
   margin-top: 8px;
   font-size: 14px;
   color: var(--text-secondary);
+}
+
+/* Board (REC-27) */
+.board-page {
+  flex-direction: row;
+  min-height: 0;
+}
+
+.board-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.board-header {
+  padding: 14px 24px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.board-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.board-title {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.segmented-item {
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.segmented-item.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.segmented-item.disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.filter-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 36px;
+}
+
+.chip {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 3px 11px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.chip:hover {
+  background: var(--bg);
+}
+
+.chip.active {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.habit-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.habit-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.switch {
+  width: 28px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--border);
+  position: relative;
+  transition: background 0.15s;
+}
+
+.switch::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.15s;
+}
+
+.habit-toggle input:checked + .switch {
+  background: var(--accent-fill);
+}
+
+.habit-toggle input:checked + .switch::after {
+  left: 14px;
+}
+
+.habit-toggle input:focus-visible + .switch {
+  outline: 2px solid var(--accent-border);
+  outline-offset: 2px;
+}
+
+.habit-icon {
+  color: var(--text-muted);
+}
+
+.board-error {
+  font-size: 13px;
+  color: #a32d2d;
+  padding: 10px 24px 0;
+}
+
+.board-columns {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 14px;
+  padding: 16px 24px;
+  overflow-y: auto;
+}
+
+.board-column {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px;
+  border-radius: var(--radius);
+  transition: background 0.15s;
+}
+
+.board-column.drag-over {
+  background: var(--accent-bg);
+}
+
+.column-title {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+  padding: 0 2px 2px;
+}
+
+.drop-hint {
+  flex: 1;
+  min-height: 80px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.task-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 11px;
+  cursor: pointer;
+}
+
+.task-card:hover {
+  border-color: var(--border-strong);
+}
+
+.task-card.in_progress {
+  border: 2px solid var(--accent-border);
+  padding: 8px 10px;
+}
+
+.task-card.done {
+  background: var(--bg);
+  opacity: 0.75;
+}
+
+.task-card.done .card-title {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.task-card.selected {
+  box-shadow: 0 0 0 2px var(--accent-border);
+}
+
+.task-card.habit {
+  background: var(--bg);
+  border: 1px dashed var(--border-strong);
+  cursor: default;
+}
+
+.task-card.habit .card-title {
+  font-weight: 400;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.card-meta {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.card-first {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--accent);
+}
+
+/* Task detail panel (REC-27, reused by REC-11) */
+.task-panel {
+  width: 340px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.task-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.task-panel-close {
+  border: none;
+  background: none;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.task-panel-close:hover {
+  color: var(--text);
+}
+
+.task-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.field-row {
+  display: flex;
+  gap: 10px;
+}
+
+.field-row .field {
+  flex: 1;
+}
+
+.field-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.field-input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text);
+  outline: none;
+}
+
+.field-input:focus {
+  border-color: var(--accent);
+}
+
+.field-textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.field-static {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.task-panel-footer {
+  margin-top: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.task-panel-error {
+  color: #a32d2d;
 }

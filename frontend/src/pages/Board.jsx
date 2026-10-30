@@ -90,7 +90,7 @@ export default function Board() {
               </Chip>
             ))}
 
-            <label className="habit-toggle" title="Habit cards arrive with habit occurrences">
+            <label className="toggle habit-toggle" title="Habit cards arrive with habit occurrences">
               <span className="habit-icon">↻</span>
               Show habits
               <input

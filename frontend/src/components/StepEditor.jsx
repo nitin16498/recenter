@@ -20,6 +20,7 @@ export default function StepEditor({ task, saving, onCancel, onSave }) {
   const [adding, setAdding] = useState('')
   const listRef = useRef(null)
   const panelRef = useRef(null)
+  const addRef = useRef(null)
   const focusAfter = useRef(null)
 
   useEffect(() => {
@@ -143,6 +144,7 @@ export default function StepEditor({ task, saving, onCancel, onSave }) {
     if (!text) return
     setList((prev) => [...prev, withKey({ text })])
     setAdding('')
+    addRef.current?.focus() // keep typing the next step after clicking ✓
     requestAnimationFrame(() => {
       const l = listRef.current
       if (l) l.scrollTop = l.scrollHeight
@@ -209,11 +211,17 @@ export default function StepEditor({ task, saving, onCancel, onSave }) {
 
       <form className="bubble-add" onSubmit={add}>
         <input
+          ref={addRef}
           placeholder="+ Add a step"
           aria-label="Add a step"
           value={adding}
           onChange={(e) => setAdding(e.target.value)}
         />
+        {adding.trim() && (
+          <button type="submit" className="bubble-add-confirm" aria-label="Add step" title="Add step">
+            ✓
+          </button>
+        )}
       </form>
 
       <footer className="step-editor-foot">

@@ -1452,11 +1452,13 @@ body {
 }
 
 .bubble-add {
+  position: relative;
   padding: 0 24px;
 }
 
 .bubble-add input {
   width: 100%;
+  padding-right: 44px; /* room for the ✓ button */
   border: 1px dashed var(--border-strong);
   border-radius: 999px;
   background: none;
@@ -1471,6 +1473,44 @@ body {
   border-style: solid;
   border-color: var(--accent);
   background: var(--bg);
+}
+
+/* ✓ inside the right edge of the add box, shown once there's text */
+.bubble-add-confirm {
+  position: absolute;
+  right: 29px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 13px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  animation: add-confirm-in 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.bubble-add-confirm:hover {
+  filter: brightness(1.08);
+}
+
+.bubble-add-confirm:focus-visible {
+  outline: 2px solid var(--accent-border);
+  outline-offset: 2px;
+}
+
+@keyframes add-confirm-in {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) scale(0.6);
+  }
 }
 
 .step-editor-foot {

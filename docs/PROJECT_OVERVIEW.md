@@ -1,6 +1,6 @@
 # Recenter — project overview
 
-*Last updated: 2026-10-29. Companion to the [README](../README.md) (setup/run) and the
+*Last updated: 2026-10-31. Companion to the [README](../README.md) (setup/run) and the
 [Jira board](https://nitin16498.atlassian.net/jira/software/projects/REC/boards) (backlog).*
 
 ## What this is
@@ -34,6 +34,7 @@ V1 is single-user on localhost. SaaS later.
 | REC-9 | LangGraph supervisor + stub subgraphs | Done |
 | REC-25 | Provider-agnostic model config (any LangChain provider) | Done — verified live on `openai:*` |
 | REC-27 | Board tab: kanban by status, epic/story filters, reusable task detail modal, dark mode | In review (Sprint 2) |
+| REC-30 | Task steps (replaces `first_action`), stepper/timeline, step editor, celebrations, Settings page | In review (Sprint 2) |
 
 Everything else (REC-10..24) is backlog: real planner logic, coach persona from
 the cheat sheets, habit occurrences engine, Gmail, memory extraction, research node.
@@ -68,9 +69,11 @@ Two SQLite files, deliberately separate concerns:
   occurrences (ask if pending, congratulate if already done), the night ceremony
   marks leftovers missed (arming never-miss-twice), and all stats are just
   aggregates over occurrence rows.
-- `Epic → Story → Task` — life areas → objectives with a definition of done →
-  one-sitting tasks with a `first_action`. The one-sitting rule: if you can't
-  finish it in the sitting you start it, it needs further breakdown.
+- `Epic → Story → Task → TaskStep`: life areas → objectives with a definition
+  of done → one-sitting tasks → ordered physical actions. The one-sitting rule:
+  if you can't finish it in the sitting you start it, it needs further
+  breakdown. A task's **current step** is the first `TaskStep` without
+  `done_at`. Since REC-30 this replaces the old single `first_action` column.
 - `Message` — chat history **for the UI only**. The agent never combs this.
 - `MemoryFact` — distilled durable facts ("drives a Honda Civic"), written by an
   extraction step (future REC-22), retrieved by subject. `embedding` column
@@ -109,6 +112,33 @@ occurrences ship. "By story" view is REC-28.
 before first paint, using the saved choice or the OS setting. `src/theme.js`
 toggles it from the sidebar and saves it to localStorage. New styles should use
 the tokens, not hex values.
+
+### Task steps, celebrations, settings (REC-30)
+
+Design: `design/task-steps.html`, an interactive prototype approved over seven
+rounds with Nitin.
+
+- **Collapsed card.** In-progress cards show the current step with a leading
+  ring to tick it. The label depends on the step's position: *First action*,
+  *Next action* or *Last action*. A 2/5 progress bar shows once any step is
+  done. Ticking the ring shows a 5s Undo toast.
+- **Open card.** Steps appear as a **Stepper** (`StepStepper.jsx`:
+  snap-scrolling cards with swipe, mouse drag, arrows, dots and ←/→) or a
+  **Timeline** (`StepTimeline.jsx`). Both offer Mark done and Undo, plus a
+  "Move to Done?" prompt after the last step. **Edit steps** opens
+  `StepEditor.jsx`: hold and drag bubbles to reorder, click to rename, delete,
+  add. Finished steps are locked, and nothing saves until Save.
+- **Status rule.** Completing a step on a To do task moves it to In progress.
+  This is enforced server side in `POST /api/tasks/{id}/steps/{sid}/complete`.
+- **Celebrations** (`src/fx.js`). They play on forward moves only, in three
+  sizes (step < card moves < task done). On the board they burst out of the
+  whole card outline; in the open card, from the button. They use one fixed
+  `.fx-layer` with Web Animations, never block clicks, and are off under
+  prefers-reduced-motion.
+- **Settings** (`/settings`, `src/settings.js`). Steps view, celebration style
+  (Confetti / Sparks / Popper + cheer / Off) and duration (0.6–5s). Stored in
+  localStorage like the theme; read with `useSettings()` / `getSettings()`.
+  Defaults: Stepper, Popper + cheer, 2.0s.
 
 ## The LangGraph agent, in detail
 

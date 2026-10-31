@@ -163,7 +163,10 @@ pip freeze > requirements.lock.txt
 | GET | `/api/messages` | Chat history for a thread (`?thread_id=main`) |
 | POST | `/api/chat` | Persist user message, run the LangGraph agent, return + persist the reply |
 | GET | `/api/board` | Tasks grouped by status (`todo`/`in_progress`/`done`) with story/epic names, plus epic and story lists |
-| PATCH | `/api/tasks/{id}` | Partial task update (`title`, `first_action`, `est_minutes`, `status`, `note`); `null` clears optional fields |
+| PATCH | `/api/tasks/{id}` | Partial task update (`title`, `est_minutes`, `status`, `note`); `null` clears optional fields |
+| POST | `/api/tasks/{id}/steps/{step_id}/complete` | Mark a step done; a To do task moves to In progress |
+| POST | `/api/tasks/{id}/steps/{step_id}/undo` | Mark a step not done |
+| PUT | `/api/tasks/{id}/steps` | Replace the open steps in order (`{"steps": [{"id"?, "text"}]}`); finished steps are locked |
 
 Quick smoke test with the backend running:
 
@@ -225,22 +228,32 @@ cd backend && rm -f recenter.db && python -m app.db
 The seed skips a DB that already has data, so to pick up new sample data run
 `rm -f recenter.db && python -m app.seed`.
 
+**After pulling REC-30 (task steps):** this is a schema change. Tasks now have a
+`task_steps` table instead of a `first_action` column. Recreate the DB with
+`rm -f recenter.db && python -m app.seed`. Note that this also deletes your chat
+history.
+
 ## Structure
 
 ```
 frontend/src/main.jsx           React entry point
 frontend/src/App.jsx            app shell: sidebar nav + routes
 frontend/src/pages/Coach.jsx    chat UI
-frontend/src/pages/Board.jsx    kanban board: filters, drag to change status
+frontend/src/pages/Board.jsx    kanban board: filters, drag to change status, tick the current step
+frontend/src/pages/Settings.jsx steps view, celebration style and duration
 frontend/src/components/TaskDetailModal.jsx  reusable task editor modal (Board now, chat cards in REC-11)
+frontend/src/components/Step*.jsx  steps as Stepper / Timeline, and the step editor
+frontend/src/components/UndoToast.jsx  "Done: … · Undo" toast
+frontend/src/fx.js              celebrations (confetti / sparks / popper)
+frontend/src/settings.js        user settings store (localStorage) + useSettings()
 frontend/src/theme.js           light/dark theme hook (sidebar toggle)
-frontend/src/tasks.js           shared task helpers: status labels, patchTask()
+frontend/src/tasks.js           shared task helpers: statuses, step helpers, task/step API calls
 frontend/src/pages/Placeholder.jsx  stubs for Today/Identity/Progress
 frontend/vite.config.js         dev server + /api proxy to :8000
 
-backend/app/main.py             FastAPI app: /api/health, /api/messages, /api/chat, /api/board, /api/tasks/{id}
+backend/app/main.py             FastAPI app: /api/health, /api/messages, /api/chat, /api/board, /api/tasks/{id}[/steps]
 backend/app/agent/graph.py      LangGraph supervisor + subgraph nodes (see docs/PROJECT_OVERVIEW.md)
-backend/app/models.py           SQLAlchemy models — identities, habits, epics/stories/tasks, messages, memory
+backend/app/models.py           SQLAlchemy models — identities, habits, epics/stories/tasks/steps, messages, memory
 backend/app/db.py               engine, session factory, init_db()
 backend/app/seed.py             sample data — python -m app.seed
 backend/.env.example            template for .env (ANTHROPIC_API_KEY, model overrides, LangSmith)

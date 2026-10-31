@@ -15,6 +15,68 @@ Entry format:
 
 ---
 
+## REC-30 — Task steps, stepper/timeline, celebrations, settings (2026-10-31)
+**Result:** shipped (in review). Branch `rec-30-task-steps`, built on `rec-27-board-tab`.
+**Story:** created by Claude Code at Nitin's explicit OK, because the design
+happened directly with Nitin over seven prototype rounds
+(`design/task-steps.html`). Lead: please review the story's scope.
+**Changed:**
+- `models.py`: new `TaskStep` model; dropped `Task.first_action`.
+- `main.py`: `TaskOut.steps`; complete, undo and replace-steps endpoints.
+- `seed.py`: 20 steps, with tasks partway through.
+- Frontend:
+  - new `fx.js`, `settings.js`, `pages/Settings.jsx`, `StepStepper.jsx`,
+    `StepTimeline.jsx`, `StepEditor.jsx`, `UndoToast.jsx`
+  - rewritten steps section in `TaskDetailModal.jsx`
+  - Board ring, labels and progress
+  - `/settings` route and sidebar link
+  - styles
+- README, overview, and the prototype in `design/`.
+
+**Schema change:** `rm recenter.db && python -m app.seed`. This also wipes chat
+history, so Nitin's local DB has **not** been touched.
+
+**Decisions:**
+- **`first_action` is gone, not kept alongside steps.** Two sources of truth
+  for "what's next" would drift. The planner (REC-10) should write steps.
+- **"Current step" isn't stored.** It's the first step without `done_at`.
+  Labels (First / Next / Last action) are derived on the client by position.
+- **Complete moves To do → In progress server side**, so every client gets the
+  same rule. Undoing that from the toast reverts the status explicitly.
+- **The replace-steps endpoint takes the open steps only.** Finished steps stay
+  locked at the front: you can't rename, move or delete them there. A done or
+  foreign id, a duplicate, or blank text gets a 422. Open steps left out of
+  the list are deleted (delete-orphan).
+- **Settings are per browser** (localStorage), like the theme. Defaults are
+  Stepper, Popper + cheer and 2.0s, as Nitin approved. They'd move to the
+  backend if this ever goes multi-device.
+- **Celebration colors are a fixed palette**, not theme tokens, since they need
+  to read in both themes. They're the only hex values outside `:root`.
+
+**For review:**
+- **Verified** in a headless browser against a scratch DB:
+  - ring tick, celebration, toast and undo
+  - a forward drag celebrates
+  - stepper arrows, ←/→, mouse-drag scroll and dots
+  - Mark done through to the last-step prompt, then Move to Done
+  - a To do task auto-starts, and undo puts it back
+  - editor drag-reorder, rename, delete and add; Esc cancels only the editor;
+    Save persists in the right order
+  - Settings persist across reload, Off disables the slider and plays nothing,
+    and Timeline applies to the open card
+  - dark mode
+  - No console errors. The only warnings are React Router's v7 future flags,
+    which were already there.
+  - The API was tested separately, including the 422 and 404 cases.
+- **REC-11 impact:** chat cards can reuse the modal, the steps components and
+  `fx.js`. The earlier split-view question still stands (see REC-27).
+- **Not built**, per the story's out-of-scope list:
+  - points and the "Oregon Trail" travellers (Nitin wants a separate design
+    pass)
+  - sound
+  - drag reordering of steps on touch: it works, but scrolling the list while
+    holding is blocked (`touch-action: none`)
+
 ## REC-27 — Board tab: kanban by status with filters (2026-10-29)
 **Result:** shipped (in review)
 **Changed:** `backend/app/main.py`: `GET /api/board`, `PATCH /api/tasks/{id}`

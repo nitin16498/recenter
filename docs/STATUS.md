@@ -15,6 +15,70 @@ Entry format:
 
 ---
 
+## REC-27 — Board tab: kanban by status with filters (2026-10-29)
+**Result:** shipped (in review)
+**Changed:** `backend/app/main.py`: `GET /api/board`, `PATCH /api/tasks/{id}`
+(`TaskOut`/`TaskPatch` schemas); `backend/app/seed.py`: +2 epics, +3 stories,
++5 tasks; new `frontend/src/pages/Board.jsx`,
+`frontend/src/components/TaskDetailModal.jsx`, `frontend/src/tasks.js`,
+`frontend/src/theme.js`; `App.jsx` nav + route + theme toggle; `index.html`
+pre-paint theme script; `styles.css` board/modal styles, new tokens, dark
+palette; README, overview; `design/` mockups committed
+**Decisions:**
+- No schema change. The seed now covers Life/Projects/Cooking, with tasks in
+  all three statuses (mirrors the mockup), because 1 epic and 2 to-do tasks
+  couldn't exercise the filters or columns. Existing DBs aren't re-seeded: run
+  `rm recenter.db && python -m app.seed` to see it.
+- `/api/board` returns `{columns: {todo, in_progress, done}, epics, stories}`.
+  Epic/story lists come back separately so chips don't depend on which tasks
+  exist. Filtering is client-side (single user, small data).
+- PATCH semantics: only fields present in the body are applied; `null` clears
+  optional fields. A blank title or a null title/status gets a 422. Status
+  transitions maintain `completed_at`.
+- Panel saves each field on blur (status on change). There's no Save button, per
+  "Edits save directly" in the mockup. A blank title reverts instead of saving.
+- Habits toggle is a stub: the toggle state works and cards with `kind: "habit"`
+  get the dashed style, but no habit cards come from the API yet. "By story" is
+  rendered disabled.
+- Story chips show the selected epic's stories (all stories when epic = All).
+  Picking an epic resets the story filter.
+- DnD is native HTML5, no new dependency. In-column order follows the server
+  (story, then order_in_story), so a dropped card lands in its story order, not
+  at the drop position.
+**For review:**
+- Verified with an API script (grouping, joins, partial patch, null-clear,
+  422/404, completed_at) and a headless-browser run against a scratch DB:
+  filters, drag To do→In progress→Done persisted, panel edits persisted, blank
+  title reverted, no console errors. `npm run build` passes.
+- No reordering within a column (no API for `order_in_story`). Probably a
+  follow-up if it matters.
+- Habit-card data shape (`kind`, `trigger_slot`) is my guess; the habit
+  occurrences story should confirm it or change it.
+
+**Review round 1 (Nitin, 2026-10-29): two changes requested**
+- **Detail view is now a centered modal, not a side panel.** This departs from
+  the approved `task-split-view.html` at Nitin's request. The card grows out of
+  the clicked card (a FLIP animation via the Web Animations API, with a fade
+  fallback for prefers-reduced-motion) over a blurred, dimmed page. It closes on
+  Esc, ×, or a click outside, and closing blurs the focused field first, so an
+  in-progress edit still saves. Status is now a segmented control instead of a
+  select. `TaskDetailPanel` was renamed to `TaskDetailModal`.
+  **Lead: REC-11's design assumed chat cards on the left with this panel on the
+  right ("Discussing: card N"). With a modal, that split view needs
+  rethinking. Worth a session with Nitin before REC-11 starts.**
+- **Dark mode with a sidebar toggle.** There's no story for it; it's done on
+  this branch in its own commit (`REC-27: dark mode…`) so it can be split out.
+  It uses token overrides, the saved choice or the OS setting, and a pre-paint
+  script so the page doesn't flash light. All remaining hex values in
+  styles.css are now tokens (`--danger`, `--on-accent`, `--knob`, `--scrim`,
+  `--shadow-lg`).
+- Fixed a dev-only bug found while verifying: StrictMode's double effect run
+  overrode the grow animation, so effect cleanup now cancels it.
+- Verified in a headless browser: grow starts exactly at the clicked card's
+  rect, Esc saved a pending note, backdrop click closes, a status change from
+  the modal moves the card, the theme persists across reload and follows the OS
+  dark setting when nothing is saved, no console errors. `npm run build` passes.
+
 ## REC-25 — Provider-agnostic model config (2026-08-28, verified 2026-08-29)
 **Result:** shipped and verified
 **Changed:** new `backend/app/agent/llm.py` (init_chat_model factory); `graph.py`

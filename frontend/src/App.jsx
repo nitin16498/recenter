@@ -1,6 +1,8 @@
 import { NavLink, Routes, Route } from 'react-router-dom'
+import Board from './pages/Board.jsx'
 import Coach from './pages/Coach.jsx'
 import Placeholder from './pages/Placeholder.jsx'
+import { useTheme } from './theme.js'
 
 // REC-6: app shell — sidebar nav + routed pages.
 // Coach is the primary (chat) view; the other tabs are placeholders
@@ -8,11 +10,14 @@ import Placeholder from './pages/Placeholder.jsx'
 const NAV_ITEMS = [
   { to: '/', label: 'Coach', icon: '💬', end: true },
   { to: '/today', label: 'Today', icon: '☀️' },
+  { to: '/board', label: 'Board', icon: '🗂️' },
   { to: '/identity', label: 'Identity', icon: '🎯' },
   { to: '/progress', label: 'Progress', icon: '📈' },
 ]
 
 export default function App() {
+  const [theme, toggleTheme] = useTheme()
+
   return (
     <div className="app">
       <aside className="sidebar">
@@ -33,6 +38,12 @@ export default function App() {
             </NavLink>
           ))}
         </nav>
+        <label className="toggle theme-toggle">
+          <span className="nav-icon">{theme === 'dark' ? '🌙' : '☀️'}</span>
+          Dark mode
+          <input type="checkbox" checked={theme === 'dark'} onChange={toggleTheme} />
+          <span className="switch" aria-hidden="true" />
+        </label>
         <div className="streak-card">
           <p className="streak-label">Current streak</p>
           <p className="streak-value">— days</p>
@@ -51,6 +62,7 @@ export default function App() {
               />
             }
           />
+          <Route path="/board" element={<Board />} />
           <Route
             path="/identity"
             element={

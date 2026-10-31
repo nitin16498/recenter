@@ -1,6 +1,6 @@
 # Recenter — project overview
 
-*Last updated: 2026-08-27. Companion to the [README](../README.md) (setup/run) and the
+*Last updated: 2026-10-29. Companion to the [README](../README.md) (setup/run) and the
 [Jira board](https://nitin16498.atlassian.net/jira/software/projects/REC/boards) (backlog).*
 
 ## What this is
@@ -33,6 +33,7 @@ V1 is single-user on localhost. SaaS later.
 | REC-8 | Real chat: persisted messages, history, composer | Done |
 | REC-9 | LangGraph supervisor + stub subgraphs | Done |
 | REC-25 | Provider-agnostic model config (any LangChain provider) | Done — verified live on `openai:*` |
+| REC-27 | Board tab: kanban by status, epic/story filters, reusable task detail modal, dark mode | In review (Sprint 2) |
 
 Everything else (REC-10..24) is backlog: real planner logic, coach persona from
 the cheat sheets, habit occurrences engine, Gmail, memory extraction, research node.
@@ -86,6 +87,28 @@ Three layers — the agent never reads all history:
 3. **memory_facts** — extraction-not-RAG for everything unstructured. Keyword
    lookup first, embeddings when it outgrows that, graph DB only if relationship
    queries actually start failing.
+
+### Board (REC-27)
+
+The Board tab (`frontend/src/pages/Board.jsx`) renders every task as a kanban,
+To do / In progress / Done, from `GET /api/board`. Epic and story chips filter
+on the client. Dragging a card (native HTML5 DnD) sends
+`PATCH /api/tasks/{id}` with the new status, optimistically, and rolls back if
+the request fails. Moving a task to `done` stamps `completed_at`; moving it back
+clears it. Clicking a card expands it into `TaskDetailModal`, a big card
+centered over a blurred page. It grows out of the clicked card and shrinks back
+into it on close (Esc, the × button, or a click outside). It's a standalone
+component: it takes a task plus `onSaved`/`onClose` and an optional
+`getOriginRect` for the animation, and saves each edit directly through the
+same PATCH. REC-11's chat cards will reuse it. The "Show habits" toggle and the
+habit card style are in place, but the API returns tasks only until habit
+occurrences ship. "By story" view is REC-28.
+
+**Theming.** Colors are CSS tokens on `:root`, with dark overrides under
+`:root[data-theme='dark']`. An inline script in `index.html` sets `data-theme`
+before first paint, using the saved choice or the OS setting. `src/theme.js`
+toggles it from the sidebar and saves it to localStorage. New styles should use
+the tokens, not hex values.
 
 ## The LangGraph agent, in detail
 

@@ -133,7 +133,9 @@ npm run dev
 
 Open **http://localhost:5173**. The Coach tab loads chat history and you can send a
 message; if the backend is down it shows *"Backend not running — start uvicorn and
-refresh."* Interactive API docs are at **http://localhost:8000/docs**.
+refresh."* The Board tab shows tasks as a kanban (drag between columns, click a
+card to edit it); run `python -m app.seed` first if you want sample tasks on it.
+Interactive API docs are at **http://localhost:8000/docs**.
 
 Vite proxies `/api/*` to `localhost:8000` (see `frontend/vite.config.js`), so the
 frontend calls `fetch('/api/...')` with no CORS setup in dev.
@@ -160,6 +162,8 @@ pip freeze > requirements.lock.txt
 | GET | `/api/health` | Liveness check → `{"status":"ok"}` |
 | GET | `/api/messages` | Chat history for a thread (`?thread_id=main`) |
 | POST | `/api/chat` | Persist user message, run the LangGraph agent, return + persist the reply |
+| GET | `/api/board` | Tasks grouped by status (`todo`/`in_progress`/`done`) with story/epic names, plus epic and story lists |
+| PATCH | `/api/tasks/{id}` | Partial task update (`title`, `first_action`, `est_minutes`, `status`, `note`); `null` clears optional fields |
 
 Quick smoke test with the backend running:
 
@@ -218,16 +222,23 @@ Verify with `pip list | grep -i langchain` — you want `langchain`,
 cd backend && rm -f recenter.db && python -m app.db
 ```
 
+The seed skips a DB that already has data, so to pick up new sample data run
+`rm -f recenter.db && python -m app.seed`.
+
 ## Structure
 
 ```
 frontend/src/main.jsx           React entry point
 frontend/src/App.jsx            app shell: sidebar nav + routes
 frontend/src/pages/Coach.jsx    chat UI
+frontend/src/pages/Board.jsx    kanban board: filters, drag to change status
+frontend/src/components/TaskDetailModal.jsx  reusable task editor modal (Board now, chat cards in REC-11)
+frontend/src/theme.js           light/dark theme hook (sidebar toggle)
+frontend/src/tasks.js           shared task helpers: status labels, patchTask()
 frontend/src/pages/Placeholder.jsx  stubs for Today/Identity/Progress
 frontend/vite.config.js         dev server + /api proxy to :8000
 
-backend/app/main.py             FastAPI app: /api/health, /api/messages, /api/chat
+backend/app/main.py             FastAPI app: /api/health, /api/messages, /api/chat, /api/board, /api/tasks/{id}
 backend/app/agent/graph.py      LangGraph supervisor + subgraph nodes (see docs/PROJECT_OVERVIEW.md)
 backend/app/models.py           SQLAlchemy models — identities, habits, epics/stories/tasks, messages, memory
 backend/app/db.py               engine, session factory, init_db()

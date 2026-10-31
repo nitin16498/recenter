@@ -2,6 +2,7 @@ import { NavLink, Routes, Route } from 'react-router-dom'
 import Board from './pages/Board.jsx'
 import Coach from './pages/Coach.jsx'
 import Placeholder from './pages/Placeholder.jsx'
+import Settings from './pages/Settings.jsx'
 import { useTheme } from './theme.js'
 
 // REC-6: app shell — sidebar nav + routed pages.
@@ -38,6 +39,13 @@ export default function App() {
             </NavLink>
           ))}
         </nav>
+        <NavLink
+          to="/settings"
+          className={({ isActive }) => `nav-item nav-settings${isActive ? ' active' : ''}`}
+        >
+          <span className="nav-icon">⚙️</span>
+          Settings
+        </NavLink>
         <label className="toggle theme-toggle">
           <span className="nav-icon">{theme === 'dark' ? '🌙' : '☀️'}</span>
           Dark mode
@@ -63,6 +71,7 @@ export default function App() {
             }
           />
           <Route path="/board" element={<Board />} />
+          <Route path="/settings" element={<Settings />} />
           <Route
             path="/identity"
             element={

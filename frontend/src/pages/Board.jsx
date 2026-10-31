@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import ErrorBoundary from '../components/ErrorBoundary.jsx'
 import TaskDetailModal from '../components/TaskDetailModal.jsx'
 import UndoToast from '../components/UndoToast.jsx'
 import { bump, celebrate } from '../fx.js'
@@ -233,15 +234,23 @@ export default function Board() {
       </div>
 
       {selected && (
-        <TaskDetailModal
-          task={selected}
-          onClose={() => setSelectedId(null)}
-          onSaved={replaceTask}
-          onNotify={notify}
-          getOriginRect={() =>
-            document.querySelector(`[data-task-id="${selected.id}"]`)?.getBoundingClientRect()
-          }
-        />
+        <ErrorBoundary
+          key={selected.id}
+          onError={() => {
+            setSelectedId(null)
+            setError('Something went wrong opening that card. Refresh and try again.')
+          }}
+        >
+          <TaskDetailModal
+            task={selected}
+            onClose={() => setSelectedId(null)}
+            onSaved={replaceTask}
+            onNotify={notify}
+            getOriginRect={() =>
+              document.querySelector(`[data-task-id="${selected.id}"]`)?.getBoundingClientRect()
+            }
+          />
+        </ErrorBoundary>
       )}
 
       {toast && (

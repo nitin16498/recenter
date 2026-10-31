@@ -68,6 +68,12 @@ history, so Nitin's local DB has **not** been touched.
   - No console errors. The only warnings are React Router's v7 future flags,
     which were already there.
   - The API was tested separately, including the 422 and 404 cases.
+- **Fixed after Nitin hit it (2026-10-31):** opening a card for a task with
+  no steps crashed the whole app, leaving a dark, empty screen. Stepper's
+  scroll-listener effect assumed the strip existed, and Nitin's pre-REC-30 DB
+  has tasks with no steps. The effect is now guarded. The modal also sits
+  inside an `ErrorBoundary`, so any future render error closes the card with
+  a message instead of blanking the app.
 - **REC-11 impact:** chat cards can reuse the modal, the steps components and
   `fx.js`. The earlier split-view question still stands (see REC-27).
 - **Not built**, per the story's out-of-scope list:

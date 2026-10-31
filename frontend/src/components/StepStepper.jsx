@@ -55,9 +55,12 @@ export default function StepStepper({ task, onComplete, onUndo, keyboard = true 
     if (cur >= 0) requestAnimationFrame(() => scrollToIndex(cur))
   }, [cur])
 
-  // Keep `view` in sync with wherever the strip has scrolled to.
+  // Keep `view` in sync with wherever the strip has scrolled to. The strip only
+  // exists when there are steps, so re-attach when that changes.
+  const hasSteps = steps.length > 0
   useEffect(() => {
     const track = trackRef.current
+    if (!track) return
     let raf = 0
     const onScroll = () => {
       cancelAnimationFrame(raf)
@@ -68,7 +71,7 @@ export default function StepStepper({ task, onComplete, onUndo, keyboard = true 
       track.removeEventListener('scroll', onScroll)
       cancelAnimationFrame(raf)
     }
-  }, [])
+  }, [hasSteps])
 
   useEffect(() => {
     if (!keyboard) return

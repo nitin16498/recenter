@@ -15,6 +15,10 @@ export default function StepStepper({ task, onComplete, onUndo, keyboard = true 
   const [view, setView] = useState(cur >= 0 ? cur : steps.length - 1)
   const trackRef = useRef(null)
   const lastCur = useRef(cur)
+  // Where a glide is heading. Quick repeated presses step from here rather than
+  // from `view`, which only catches up when the scroll settles.
+  const targetRef = useRef(null)
+  const from = () => targetRef.current ?? view
 
   const slides = () => [...(trackRef.current?.querySelectorAll('.step-slide') ?? [])]
 
@@ -22,6 +26,7 @@ export default function StepStepper({ task, onComplete, onUndo, keyboard = true 
     const track = trackRef.current
     const slide = slides()[i]
     if (!track || !slide) return
+    targetRef.current = i
     track.scrollTo({
       left: slide.offsetLeft - (track.clientWidth - slide.offsetWidth) / 2,
       behavior: reducedMotion() ? 'instant' : behavior,
@@ -64,11 +69,21 @@ export default function StepStepper({ task, onComplete, onUndo, keyboard = true 
     let raf = 0
     const onScroll = () => {
       cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(() => setView(nearestIndex()))
+      raf = requestAnimationFrame(() => {
+        const i = nearestIndex()
+        if (i === targetRef.current) targetRef.current = null
+        setView(i)
+      })
+    }
+    // A glide that got interrupted (e.g. by a swipe) shouldn't leave a stale target.
+    const onScrollEnd = () => {
+      targetRef.current = null
     }
     track.addEventListener('scroll', onScroll)
+    track.addEventListener('scrollend', onScrollEnd)
     return () => {
       track.removeEventListener('scroll', onScroll)
+      track.removeEventListener('scrollend', onScrollEnd)
       cancelAnimationFrame(raf)
     }
   }, [hasSteps])
@@ -79,7 +94,7 @@ export default function StepStepper({ task, onComplete, onUndo, keyboard = true 
       if (e.target.matches?.('input, textarea, select, [contenteditable]')) return
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
       e.preventDefault()
-      const next = Math.max(0, Math.min(steps.length - 1, view + (e.key === 'ArrowRight' ? 1 : -1)))
+      const next = Math.max(0, Math.min(steps.length - 1, from() + (e.key === 'ArrowRight' ? 1 : -1)))
       scrollToIndex(next)
     }
     window.addEventListener('keydown', onKey)
@@ -154,7 +169,7 @@ export default function StepStepper({ task, onComplete, onUndo, keyboard = true 
           className="stepper-arrow prev"
           aria-label="Previous step"
           disabled={view === 0}
-          onClick={() => scrollToIndex(view - 1)}
+          onClick={() => scrollToIndex(Math.max(0, from() - 1))}
         >
           ‹
         </button>
@@ -179,7 +194,7 @@ export default function StepStepper({ task, onComplete, onUndo, keyboard = true 
           className="stepper-arrow next"
           aria-label="Next step"
           disabled={view === steps.length - 1}
-          onClick={() => scrollToIndex(view + 1)}
+          onClick={() => scrollToIndex(Math.min(steps.length - 1, from() + 1))}
         >
           ›
         </button>

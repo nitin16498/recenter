@@ -221,7 +221,11 @@ scripts/test.sh --quick   # skip the browser tests, ~3s, for quick iteration
 - *On GitHub:* `.github/workflows/regression.yml` runs three jobs on every push
   and pull request: backend, frontend unit + build, and browser tests (after
   the other two pass). If the browser tests fail, the Playwright report is
-  attached to the run as an artifact.
+  attached to the run as an artifact. Check results from the terminal with
+  `gh run list` / `gh run view --log-failed`.
+- *Blocking merges:* not set up, because branch protection on a private repo
+  needs GitHub Pro. If the repo moves to Pro, require the three Regression
+  checks on `main` (Settings → Branches).
 
 **Running pieces on their own:**
 

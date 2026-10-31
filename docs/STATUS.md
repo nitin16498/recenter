@@ -101,9 +101,15 @@ work.
   spec.
 - **The empty-steps crash** from earlier today is now a regression test, in
   both views.
-- **GitHub Actions** runs once the branch is pushed to `nitin16498/recenter`.
-  It hasn't run on GitHub yet, because nothing has been pushed this session.
-  Worth watching the first run.
+- **GitHub Actions is verified.** The first run on `rec-30-task-steps` (run
+  41244123111, 2026-10-31) was all green: backend, frontend, and browser tests
+  in about 3 minutes. `gh` is now installed and logged in as nitin16498, so
+  Claude Code can read CI results (`gh run list`, `gh run view --log-failed`).
+- **Merge-blocking on `main` is not set up.** GitHub only allows branch
+  protection on private repos with GitHub Pro (or on public repos). Until
+  then, the pre-push hook is the gate. To turn it on later: Settings →
+  Branches → rule for `main` → require the checks "Backend tests", "Frontend
+  unit tests + build" and "Browser tests".
 - **Not covered by automated tests:** how the celebrations look (only that
   they start and clean up) and touch gestures (Chromium desktop only).
 

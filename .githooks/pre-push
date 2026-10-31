@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Runs the full regression suite before every push. Enable once per clone:
+#   git config core.hooksPath .githooks
+# Skip in an emergency with: git push --no-verify
+echo "pre-push: running regression suite (scripts/test.sh)…"
+exec "$(git rev-parse --show-toplevel)/scripts/test.sh"

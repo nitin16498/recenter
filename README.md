@@ -46,6 +46,7 @@ python3.12 -m venv .venv                   # NOT plain python3 on macOS — see 
 source .venv/bin/activate                  # Windows: .venv\Scripts\activate
 pip install --upgrade pip
 pip install -r requirements.txt
+pip install -r requirements-dev.txt        # test tools (pytest)
 cp .env.example .env                       # then paste your ANTHROPIC_API_KEY into .env
 python -m app.db                           # create SQLite tables
 python -m app.seed                         # optional: sample identities/habits/tasks
@@ -75,6 +76,14 @@ python -m app.seed                         # optional: sample identities/habits/
 # Frontend
 cd frontend
 npm install                                # uses package-lock.json — same versions everywhere
+npx playwright install chromium            # browser for the UI tests (one-time download)
+```
+
+Then turn on the pre-push hook, once per clone, so the regression suite runs
+before every push (see [Testing](#testing)):
+
+```bash
+git config core.hooksPath .githooks
 ```
 
 Verify the interpreter before installing — this is the one step that catches the
@@ -108,7 +117,9 @@ cd frontend && npm install
 ```
 
 Schema changed in `models.py`? There are no migrations yet (single user, no real
-data) — recreate the DB: `cd backend && rm -f recenter.db && python -m app.db`.
+data). Recreate the DB with `cd backend && rm -f recenter.db && python -m app.seed`.
+This also deletes your chat history, so back up `recenter.db` first if you
+want to keep it.
 Agent acting confused about past conversations? Its thread memory lives in
 `checkpoints.db` — delete it for a fresh-brain start.
 
@@ -163,7 +174,10 @@ pip freeze > requirements.lock.txt
 | GET | `/api/messages` | Chat history for a thread (`?thread_id=main`) |
 | POST | `/api/chat` | Persist user message, run the LangGraph agent, return + persist the reply |
 | GET | `/api/board` | Tasks grouped by status (`todo`/`in_progress`/`done`) with story/epic names, plus epic and story lists |
-| PATCH | `/api/tasks/{id}` | Partial task update (`title`, `first_action`, `est_minutes`, `status`, `note`); `null` clears optional fields |
+| PATCH | `/api/tasks/{id}` | Partial task update (`title`, `est_minutes`, `status`, `note`); `null` clears optional fields |
+| POST | `/api/tasks/{id}/steps/{step_id}/complete` | Mark a step done; a To do task moves to In progress |
+| POST | `/api/tasks/{id}/steps/{step_id}/undo` | Mark a step not done |
+| PUT | `/api/tasks/{id}/steps` | Replace the open steps in order (`{"steps": [{"id"?, "text"}]}`); finished steps are locked |
 
 Quick smoke test with the backend running:
 
@@ -174,6 +188,61 @@ curl -X POST localhost:8000/api/chat \
   -d '{"content":"hello"}'
 curl localhost:8000/api/messages
 ```
+
+## Testing
+
+One command runs the whole regression suite. It must pass before anything is
+pushed:
+
+```bash
+scripts/test.sh           # everything, ~45s
+scripts/test.sh --quick   # skip the browser tests, ~3s, for quick iteration
+```
+
+| Layer | Tool | Where | Covers |
+| --- | --- | --- | --- |
+| Backend | pytest | `backend/tests/` | every endpoint: chat (agent stubbed), board, task PATCH, step complete/undo/replace, validation, seed |
+| Frontend logic | Vitest | `frontend/src/*.test.js` | step helpers and First/Next/Last labels, settings store, API helpers |
+| Build | Vite | — | `npm run build` must succeed |
+| User flows | Playwright | `frontend/e2e/*.spec.js` | navigation and chat, board and filters and drag, ring check and undo, task card, Stepper, Timeline, step editor, Settings, dark mode, reduced motion, and the empty-steps crash |
+
+**Isolation.**
+- Tests never touch `backend/recenter.db` or your running dev servers.
+- pytest uses a throwaway database per test.
+- Playwright starts its own backend on :8011 (with `RECENTER_TESTING=1`, a
+  throwaway `e2e-test.db`, and canned agent replies) and its own frontend on
+  :5181. Each test starts from freshly seeded data.
+- No API keys are needed, and no AI calls are made.
+
+**Automatic runs.**
+- *On your machine:* `.githooks/pre-push` runs `scripts/test.sh` before every
+  `git push` (enable it with `git config core.hooksPath .githooks`). Skip it in
+  an emergency with `git push --no-verify`.
+- *On GitHub:* `.github/workflows/regression.yml` runs three jobs on every push
+  and pull request: backend, frontend unit + build, and browser tests (after
+  the other two pass). If the browser tests fail, the Playwright report is
+  attached to the run as an artifact. Check results from the terminal with
+  `gh run list` / `gh run view --log-failed`.
+- *Blocking merges:* `main` is protected. A merge needs all three Regression
+  checks green ("Backend tests", "Frontend unit tests + build", "Browser
+  tests"). Force-pushes and deleting `main` are blocked.
+
+> The repo is **public**. Never commit `backend/.env`, `*.db` files or keys.
+> They're gitignored, so keep it that way.
+
+**Running pieces on their own:**
+
+```bash
+cd backend && .venv/bin/python -m pytest                 # backend
+cd frontend && npm test                                   # unit
+cd frontend && npm run test:e2e                           # browser tests
+cd frontend && npx playwright test e2e/editor.spec.js     # one file
+cd frontend && npx playwright test --ui                   # watch them run, step by step
+```
+
+**Adding tests.** New features come with tests in the same change, and bug
+fixes come with a test that would have caught the bug. Browser tests import
+`test` from `e2e/helpers.js`, which resets the data before each test.
 
 ## Troubleshooting
 
@@ -225,26 +294,44 @@ cd backend && rm -f recenter.db && python -m app.db
 The seed skips a DB that already has data, so to pick up new sample data run
 `rm -f recenter.db && python -m app.seed`.
 
+**After pulling REC-30 (task steps):** this is a schema change. Tasks now have a
+`task_steps` table instead of a `first_action` column. Recreate the DB with
+`rm -f recenter.db && python -m app.seed`. Note that this also deletes your chat
+history.
+
 ## Structure
 
 ```
 frontend/src/main.jsx           React entry point
 frontend/src/App.jsx            app shell: sidebar nav + routes
 frontend/src/pages/Coach.jsx    chat UI
-frontend/src/pages/Board.jsx    kanban board: filters, drag to change status
+frontend/src/pages/Board.jsx    kanban board: filters, drag to change status, tick the current step
+frontend/src/pages/Settings.jsx steps view, celebration style and duration
 frontend/src/components/TaskDetailModal.jsx  reusable task editor modal (Board now, chat cards in REC-11)
+frontend/src/components/Step*.jsx  steps as Stepper / Timeline, and the step editor
+frontend/src/components/UndoToast.jsx  "Done: … · Undo" toast
+frontend/src/fx.js              celebrations (confetti / sparks / popper)
+frontend/src/settings.js        user settings store (localStorage) + useSettings()
 frontend/src/theme.js           light/dark theme hook (sidebar toggle)
-frontend/src/tasks.js           shared task helpers: status labels, patchTask()
+frontend/src/tasks.js           shared task helpers: statuses, step helpers, task/step API calls
 frontend/src/pages/Placeholder.jsx  stubs for Today/Identity/Progress
 frontend/vite.config.js         dev server + /api proxy to :8000
 
-backend/app/main.py             FastAPI app: /api/health, /api/messages, /api/chat, /api/board, /api/tasks/{id}
+backend/app/main.py             FastAPI app: /api/health, /api/messages, /api/chat, /api/board, /api/tasks/{id}[/steps]
 backend/app/agent/graph.py      LangGraph supervisor + subgraph nodes (see docs/PROJECT_OVERVIEW.md)
-backend/app/models.py           SQLAlchemy models — identities, habits, epics/stories/tasks, messages, memory
+backend/app/models.py           SQLAlchemy models — identities, habits, epics/stories/tasks/steps, messages, memory
 backend/app/db.py               engine, session factory, init_db()
 backend/app/seed.py             sample data — python -m app.seed
 backend/.env.example            template for .env (ANTHROPIC_API_KEY, model overrides, LangSmith)
 backend/requirements.txt        direct dependencies (pinned)
+backend/requirements-dev.txt    test-only dependencies (pytest)
+backend/tests/                  pytest suite (fresh seeded DB per test, agent stubbed)
+frontend/e2e/                   Playwright browser tests + helpers.js
+frontend/playwright.config.js   starts the isolated test backend (:8011) and frontend (:5181)
+scripts/test.sh                 the regression suite: backend + unit + build + browser
+.githooks/pre-push              runs scripts/test.sh before every push
+.github/workflows/regression.yml  same suite on GitHub for every push and PR
+design/                         approved HTML mockups and prototypes (see design/README.md)
 backend/requirements.lock.txt   full resolved dependency set
 
 docs/PROJECT_OVERVIEW.md        architecture, data model, agent graph deep dive, roadmap

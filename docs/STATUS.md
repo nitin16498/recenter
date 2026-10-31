@@ -15,6 +15,175 @@ Entry format:
 
 ---
 
+## Sprint 2 so far: summary for the lead (2026-10-31)
+**Read this first.** Much of Sprint 2's design happened directly between Nitin
+and Claude Code, so here is the whole picture in one place.
+
+**Stories**
+
+| Story | State | Branch | What it is now |
+| --- | --- | --- | --- |
+| REC-27 Board tab | In review | `rec-27-board-tab` | Kanban + filters as specced, **plus two review changes from Nitin**: the detail panel became a centered modal that grows out of the card over a blurred page, and a dark mode toggle (no story of its own). |
+| REC-30 Task steps (+ celebrations, settings) | In review | `rec-30-task-steps` (stacked on REC-27) | New story, **created by Claude Code with Nitin's explicit OK** (normally your job). Covers multi-step tasks, Stepper/Timeline, step editor, celebrations, Settings page, and now the regression suite + CI. |
+
+Neither story is merged. Merge REC-27 first.
+
+**Design decisions Nitin made (the details are in REC-30's Jira comments and
+`design/task-steps.html`, whose notes record each round):**
+- **Steps replace `first_action`.** A task has ordered steps, and its current
+  step is the first one not done.
+- **Collapsed card labels** say *First action*, *Next action* or *Last action*
+  by where the current step sits. Only In progress cards show the step text,
+  with a leading ring to tick it off.
+- **Progress travels with the task.** A card moved back to To do keeps its
+  finished steps.
+- **Finishing a step on a To do task moves it to In progress.**
+- **The open card shows a Stepper** (his pick) of horizontally scrolling step
+  cards with side arrows. Timeline is an option in Settings.
+- **Editing steps** is behind an "Edit steps" button (it's rare): hold-and-drag
+  bubbles, plus a ✓ button to add.
+- **Celebrations** ("atta-boy", around the card, falling confetti). Style and
+  duration (0.6–5s) are in Settings; defaults are Popper + cheer, 2.0s.
+- **Later, not designed yet:** points, and Oregon Trail-style travellers that
+  task completion keeps alive.
+
+**Needs your attention**
+1. **REC-11's approved split-view design conflicts with the modal.** It needs
+   a design pass before REC-11 starts.
+2. **REC-10 should write `task_steps`**, not a first action.
+3. **Possible new stories:** gamification phase 2; Alembic migrations (resets
+   wipe Nitin's chat history); dark mode, retroactively; FastAPI lifespan and
+   React Router v7 cleanups.
+4. **Nitin's local DB was upgraded in place**, not reset, to keep his chat.
+   Backup: `backend/recenter.backup-2026-10-31.db`.
+
+**New ground rule (CLAUDE.md):** every build runs `scripts/test.sh`, new
+features ship with tests, and bug fixes ship with a regression test. The same
+suite gates `git push` and runs in GitHub Actions.
+
+## REC-30 (cont.) — Regression suite, pre-push hook, CI (2026-10-31)
+**Result:** shipped (in review), on `rec-30-task-steps`. Asked for by Nitin.
+There's no story of its own; it sits under REC-30 because it tests REC-27/30
+work.
+
+**Changed:**
+- `backend/tests/`: 36 pytest tests, with a fresh seeded temp DB per test and
+  the agent stubbed.
+- `frontend/src/*.test.js`: 20 Vitest tests.
+- `frontend/e2e/`: 42 Playwright tests in 9 spec files, plus `helpers.js`.
+- `frontend/playwright.config.js`: isolated servers on :8011/:5181.
+- `scripts/test.sh` (`--quick` skips the browser tests), `.githooks/pre-push`,
+  and `.github/workflows/regression.yml` (backend, frontend, then e2e jobs; no
+  secrets).
+- `requirements-dev.txt` (pytest); lock refreshed.
+- New dev dependencies: vitest 2.1.9, @playwright/test 1.53.2.
+- README Testing section, `design/README.md`, CLAUDE.md workflow and
+  current-state updates.
+
+**Decisions:**
+- **Test seams are env-gated and off by default:**
+  - `RECENTER_DATABASE_URL` and `RECENTER_CHECKPOINT_DB` set the DB paths.
+  - `RECENTER_TESTING=1` gives canned agent replies plus
+    `POST /api/_test/reset`.
+  - Tests never call a model and never touch `recenter.db` or the dev servers.
+- **Browser tests run serially** (`workers: 1`) and re-seed before each test,
+  because they share one backend DB. A full run takes about 40s, and it was
+  stable over three consecutive runs.
+- **The pre-push hook runs the full suite, not `--quick`,** so UI regressions
+  can't slip through. `git push --no-verify` is the escape hatch.
+- **A known FastAPI `on_event` deprecation warning is filtered** in
+  `pytest.ini`. It predates this work.
+
+**For review:**
+- **Bug the suite caught:** quick repeated ←/→ presses or arrow clicks in the
+  Stepper only moved one step, because the next target was computed from the
+  slide in view mid-glide. Fixed in `cb8d0a9`, and covered by the stepper
+  spec.
+- **The empty-steps crash** from earlier today is now a regression test, in
+  both views.
+- **GitHub Actions is verified.** The first run on `rec-30-task-steps` (run
+  41244123111, 2026-10-31) was all green: backend, frontend, and browser tests
+  in about 3 minutes. `gh` is now installed and logged in as nitin16498, so
+  Claude Code can read CI results (`gh run list`, `gh run view --log-failed`).
+- **`main` is protected (2026-10-31).** Nitin made the repo public, which
+  allows branch protection on the free plan. Merging into `main` now requires
+  the three Regression checks to pass: "Backend tests", "Frontend unit tests +
+  build" and "Browser tests". Force-pushes and branch deletion are blocked.
+  Admins (Nitin) can still override in an emergency.
+- **Before going public, git history was scanned for secrets.** No `.env` or
+  `*.db` files were ever committed, and there are no API-key patterns. Keep
+  it that way: secrets only in `backend/.env`.
+- **Not covered by automated tests:** how the celebrations look (only that
+  they start and clean up) and touch gestures (Chromium desktop only).
+
+## REC-30 — Task steps, stepper/timeline, celebrations, settings (2026-10-31)
+**Result:** shipped (in review). Branch `rec-30-task-steps`, built on `rec-27-board-tab`.
+**Story:** created by Claude Code at Nitin's explicit OK, because the design
+happened directly with Nitin over seven prototype rounds
+(`design/task-steps.html`). Lead: please review the story's scope.
+**Changed:**
+- `models.py`: new `TaskStep` model; dropped `Task.first_action`.
+- `main.py`: `TaskOut.steps`; complete, undo and replace-steps endpoints.
+- `seed.py`: 20 steps, with tasks partway through.
+- Frontend:
+  - new `fx.js`, `settings.js`, `pages/Settings.jsx`, `StepStepper.jsx`,
+    `StepTimeline.jsx`, `StepEditor.jsx`, `UndoToast.jsx`
+  - rewritten steps section in `TaskDetailModal.jsx`
+  - Board ring, labels and progress
+  - `/settings` route and sidebar link
+  - styles
+- README, overview, and the prototype in `design/`.
+
+**Schema change:** `rm recenter.db && python -m app.seed`. This also wipes chat
+history, so Nitin's local DB has **not** been touched.
+
+**Decisions:**
+- **`first_action` is gone, not kept alongside steps.** Two sources of truth
+  for "what's next" would drift. The planner (REC-10) should write steps.
+- **"Current step" isn't stored.** It's the first step without `done_at`.
+  Labels (First / Next / Last action) are derived on the client by position.
+- **Complete moves To do → In progress server side**, so every client gets the
+  same rule. Undoing that from the toast reverts the status explicitly.
+- **The replace-steps endpoint takes the open steps only.** Finished steps stay
+  locked at the front: you can't rename, move or delete them there. A done or
+  foreign id, a duplicate, or blank text gets a 422. Open steps left out of
+  the list are deleted (delete-orphan).
+- **Settings are per browser** (localStorage), like the theme. Defaults are
+  Stepper, Popper + cheer and 2.0s, as Nitin approved. They'd move to the
+  backend if this ever goes multi-device.
+- **Celebration colors are a fixed palette**, not theme tokens, since they need
+  to read in both themes. They're the only hex values outside `:root`.
+
+**For review:**
+- **Verified** in a headless browser against a scratch DB:
+  - ring tick, celebration, toast and undo
+  - a forward drag celebrates
+  - stepper arrows, ←/→, mouse-drag scroll and dots
+  - Mark done through to the last-step prompt, then Move to Done
+  - a To do task auto-starts, and undo puts it back
+  - editor drag-reorder, rename, delete and add; Esc cancels only the editor;
+    Save persists in the right order
+  - Settings persist across reload, Off disables the slider and plays nothing,
+    and Timeline applies to the open card
+  - dark mode
+  - No console errors. The only warnings are React Router's v7 future flags,
+    which were already there.
+  - The API was tested separately, including the 422 and 404 cases.
+- **Fixed after Nitin hit it (2026-10-31):** opening a card for a task with
+  no steps crashed the whole app, leaving a dark, empty screen. Stepper's
+  scroll-listener effect assumed the strip existed, and Nitin's pre-REC-30 DB
+  has tasks with no steps. The effect is now guarded. The modal also sits
+  inside an `ErrorBoundary`, so any future render error closes the card with
+  a message instead of blanking the app.
+- **REC-11 impact:** chat cards can reuse the modal, the steps components and
+  `fx.js`. The earlier split-view question still stands (see REC-27).
+- **Not built**, per the story's out-of-scope list:
+  - points and the "Oregon Trail" travellers (Nitin wants a separate design
+    pass)
+  - sound
+  - drag reordering of steps on touch: it works, but scrolling the list while
+    holding is blocked (`touch-action: none`)
+
 ## REC-27 — Board tab: kanban by status with filters (2026-10-29)
 **Result:** shipped (in review)
 **Changed:** `backend/app/main.py`: `GET /api/board`, `PATCH /api/tasks/{id}`

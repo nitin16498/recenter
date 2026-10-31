@@ -1,6 +1,6 @@
 # Recenter — project overview
 
-*Last updated: 2026-10-29. Companion to the [README](../README.md) (setup/run) and the
+*Last updated: 2026-10-31. Companion to the [README](../README.md) (setup/run) and the
 [Jira board](https://nitin16498.atlassian.net/jira/software/projects/REC/boards) (backlog).*
 
 ## What this is
@@ -24,7 +24,7 @@ fortnight: a stats review conversation that can mutate habits.
 
 V1 is single-user on localhost. SaaS later.
 
-## Where we are (Sprint 1 — complete-ish)
+## Where we are (Sprint 1 done; Sprint 2 stories in review)
 
 | Story | What | Status |
 | --- | --- | --- |
@@ -34,6 +34,12 @@ V1 is single-user on localhost. SaaS later.
 | REC-9 | LangGraph supervisor + stub subgraphs | Done |
 | REC-25 | Provider-agnostic model config (any LangChain provider) | Done — verified live on `openai:*` |
 | REC-27 | Board tab: kanban by status, epic/story filters, reusable task detail modal, dark mode | In review (Sprint 2) |
+| REC-30 | Task steps (replaces `first_action`), stepper/timeline, step editor, celebrations, Settings page, regression suite + CI | In review (Sprint 2) |
+
+The Sprint 2 stories are on **stacked branches, not merged yet**:
+`rec-27-board-tab` → `rec-30-task-steps`. Merge REC-27 first. Both sit under
+the REC-26 epic (Task manager). REC-28 ("By story" view) is the epic's other
+open story.
 
 Everything else (REC-10..24) is backlog: real planner logic, coach persona from
 the cheat sheets, habit occurrences engine, Gmail, memory extraction, research node.
@@ -68,9 +74,11 @@ Two SQLite files, deliberately separate concerns:
   occurrences (ask if pending, congratulate if already done), the night ceremony
   marks leftovers missed (arming never-miss-twice), and all stats are just
   aggregates over occurrence rows.
-- `Epic → Story → Task` — life areas → objectives with a definition of done →
-  one-sitting tasks with a `first_action`. The one-sitting rule: if you can't
-  finish it in the sitting you start it, it needs further breakdown.
+- `Epic → Story → Task → TaskStep`: life areas → objectives with a definition
+  of done → one-sitting tasks → ordered physical actions. The one-sitting rule:
+  if you can't finish it in the sitting you start it, it needs further
+  breakdown. A task's **current step** is the first `TaskStep` without
+  `done_at`. Since REC-30 this replaces the old single `first_action` column.
 - `Message` — chat history **for the UI only**. The agent never combs this.
 - `MemoryFact` — distilled durable facts ("drives a Honda Civic"), written by an
   extraction step (future REC-22), retrieved by subject. `embedding` column
@@ -109,6 +117,58 @@ occurrences ship. "By story" view is REC-28.
 before first paint, using the saved choice or the OS setting. `src/theme.js`
 toggles it from the sidebar and saves it to localStorage. New styles should use
 the tokens, not hex values.
+
+### Task steps, celebrations, settings (REC-30)
+
+Design: `design/task-steps.html`, an interactive prototype approved over seven
+rounds with Nitin.
+
+- **Collapsed card.** In-progress cards show the current step with a leading
+  ring to tick it. The label depends on the step's position: *First action*,
+  *Next action* or *Last action*. A 2/5 progress bar shows once any step is
+  done. Ticking the ring shows a 5s Undo toast.
+- **Open card.** Steps appear as a **Stepper** (`StepStepper.jsx`:
+  snap-scrolling cards with swipe, mouse drag, arrows, dots and ←/→) or a
+  **Timeline** (`StepTimeline.jsx`). Both offer Mark done and Undo, plus a
+  "Move to Done?" prompt after the last step. **Edit steps** opens
+  `StepEditor.jsx`: hold and drag bubbles to reorder, click to rename, delete,
+  add. Finished steps are locked, and nothing saves until Save.
+- **Status rule.** Completing a step on a To do task moves it to In progress.
+  This is enforced server side in `POST /api/tasks/{id}/steps/{sid}/complete`.
+- **Celebrations** (`src/fx.js`). They play on forward moves only, in three
+  sizes (step < card moves < task done). On the board they burst out of the
+  whole card outline; in the open card, from the button. They use one fixed
+  `.fx-layer` with Web Animations, never block clicks, and are off under
+  prefers-reduced-motion.
+- **Settings** (`/settings`, `src/settings.js`). Steps view, celebration style
+  (Confetti / Sparks / Popper + cheer / Off) and duration (0.6–5s). Stored in
+  localStorage like the theme; read with `useSettings()` / `getSettings()`.
+  Defaults: Stepper, Popper + cheer, 2.0s.
+
+## Testing and regression (REC-30)
+
+`scripts/test.sh` is the regression suite. It runs before every push (git
+pre-push hook) and on GitHub Actions for every push and PR
+(`.github/workflows/regression.yml`). As of 2026-10-31 it has 98 tests, all
+passing:
+
+- **Backend: 36 pytest tests** (`backend/tests/`). Every endpoint, against a
+  fresh seeded temp DB per test, with the agent stubbed.
+- **Frontend logic: 20 Vitest tests** (`frontend/src/*.test.js`). Step helpers,
+  the First/Next/Last rule, the settings store, the API helpers.
+- **User flows: 42 Playwright tests** (`frontend/e2e/`). Real browser against
+  an isolated backend (:8011) and frontend (:5181).
+
+Two test seams in app code, both off unless an env var is set:
+`RECENTER_DATABASE_URL` / `RECENTER_CHECKPOINT_DB` (DB paths) and
+`RECENTER_TESTING=1` (canned agent replies plus `POST /api/_test/reset`).
+
+The rule, in CLAUDE.md: every new feature ships with tests, every bug fix with
+a test that would have caught it, and nothing is reported done without a green
+full run. Two real bugs have already been caught this way:
+- the empty-steps crash (now a regression test)
+- quick repeated Stepper presses only moving one step (found by the suite,
+  fixed)
 
 ## The LangGraph agent, in detail
 
@@ -197,15 +257,33 @@ REC-9 was worth doing before any "real" agent logic.
 
 ## What's next (Sprint 2 candidates, in proposed order)
 
+0. **Review and merge REC-27, then REC-30** (Nitin).
 1. **REC-10 — collaborative breakdown flow.** The planner interrogates (max 1-2
    questions), breaks down backwards from done, persists Story+Tasks, prescribes
    the first physical action. Attacks the procrastination problem directly.
+   Since REC-30, the breakdown should write each task's **steps**
+   (`task_steps`), not a single first action.
 2. **REC-11 — inline task cards in chat.** Agent messages can embed checkable
    task cards; checking off writes to the DB. The pattern the whole UI relies on.
+   **This needs a design pass first.** Its approved mockup put the detail panel
+   beside the chat, but REC-27's review replaced that panel with a centered
+   modal that would cover the conversation. The modal, steps components and
+   `fx.js` are reusable as they are.
 3. **REC-15 — coach persona from the cheat sheets.** Distill the four PDFs into
    the habit_coach system prompt.
 4. Then: habit occurrences engine + streaks (REC-16/17), night ceremony (REC-12),
    morning dispatch (REC-13), Gmail epic (REC-18+), memory extraction (REC-22).
+
+Raised during Sprint 2, not stories yet (for the lead):
+- **Gamification, phase 2.** Nitin wants a points system and small "Oregon
+  Trail" travellers along the bottom of the screen, which completing tasks
+  helps survive (random boons). It needs its own design pass. Step `done_at`
+  timestamps already exist, so points can be worked out later from past work.
+- **Migrations (Alembic).** The schema has changed twice now, and "rm the DB"
+  wipes real chat history. REC-30 got around it by hand.
+- **Small cleanups:** FastAPI `on_event` → lifespan; React Router v7 future
+  flags (the console warnings); dark mode has no story of its own (it shipped
+  in REC-27 at Nitin's request).
 
 ## Working agreements
 

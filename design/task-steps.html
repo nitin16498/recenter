@@ -1,0 +1,1273 @@
+<!doctype html>
+<!-- Design proposal: task steps (several actions per task). Interactive prototype, round 2.
+     NOT yet approved. Open in a browser and click around. Implementation will use the
+     app's own styles.css and components; this file is self-contained on purpose. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Recenter: task steps prototype</title>
+<script>
+  document.documentElement.dataset.theme =
+    matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+</script>
+<style>
+  /* Tokens copied from frontend/src/styles.css (light + dark). */
+  :root {
+    --page: #f1efe8;
+    --bg: #faf9f7; --surface: #ffffff;
+    --border: #e7e4de; --border-strong: #d3cfc7;
+    --text: #2c2c2a; --text-secondary: #6f6d66; --text-muted: #a3a099;
+    --accent: #185fa5; --accent-bg: #e6f1fb; --accent-border: #85b7eb; --accent-fill: #378add;
+    --on-accent: #ffffff; --knob: #ffffff;
+    --scrim: rgba(44, 44, 42, 0.18);
+    --shadow-md: 0 6px 18px rgba(44, 44, 42, 0.14);
+    --shadow-lg: 0 24px 60px rgba(44, 44, 42, 0.18), 0 2px 8px rgba(44, 44, 42, 0.08);
+    color-scheme: light;
+  }
+  :root[data-theme='dark'] {
+    --page: #121110;
+    --bg: #1c1b19; --surface: #252422;
+    --border: #393733; --border-strong: #4e4b45;
+    --text: #ecebe7; --text-secondary: #b4b1a9; --text-muted: #807d76;
+    --accent: #8dbdf0; --accent-bg: #1e3146; --accent-border: #3f6e9f; --accent-fill: #378add;
+    --on-accent: #10202f; --knob: #f4f3f0;
+    --scrim: rgba(0, 0, 0, 0.45);
+    --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--page); color: var(--text); padding: 24px 16px 56px;
+         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  button { font-family: inherit; }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+  .section-title { font-size: 13px; font-weight: 600; margin: 22px 0 8px; }
+
+  /* Prototype controls (not part of the design) */
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; margin-bottom: 12px; font-size: 12px; color: var(--text-secondary); }
+  .toolbar h1 { font-size: 15px; font-weight: 600; color: var(--text); margin-right: auto; }
+  .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 999px; overflow: hidden; background: var(--surface); }
+  .seg button { border: none; background: none; padding: 5px 12px; font-size: 12px; color: var(--text-secondary); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button.on { background: var(--accent-bg); color: var(--accent); font-weight: 500; }
+  .ghost { border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-secondary); border-radius: 999px; padding: 5px 12px; font-size: 12px; cursor: pointer; }
+  .try { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; line-height: 1.6; color: var(--text-secondary); }
+  .try b { color: var(--text); font-weight: 600; }
+  .try ol { margin-left: 18px; }
+
+  /* App frame */
+  .frame { position: relative; height: 640px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; }
+  .board-head { padding: 14px 24px 12px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: space-between; }
+  .board-head h2 { font-size: 16px; font-weight: 500; }
+  .board-head span { font-size: 12px; color: var(--text-muted); }
+  .cols { flex: 1; min-height: 0; display: flex; gap: 14px; padding: 16px 24px; overflow-y: auto; }
+  .col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; padding: 6px; border-radius: 10px; transition: background .15s; }
+  .col.over { background: var(--accent-bg); }
+  .col-title { font-size: 11px; font-weight: 500; color: var(--text-secondary); letter-spacing: .02em; padding: 0 2px 2px; }
+  .hint { flex: 1; min-height: 80px; border: 1px dashed var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--text-muted); }
+
+  /* Collapsed card */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; cursor: pointer; }
+  .card:hover { border-color: var(--border-strong); }
+  .card.in_progress { border: 2px solid var(--accent-border); padding: 8px 10px; }
+  .card.done { background: var(--bg); opacity: .75; }
+  .card.done .c-title { text-decoration: line-through; color: var(--text-secondary); font-weight: 400; }
+  .card.hidden { visibility: hidden; }
+  .c-title { font-size: 13px; font-weight: 500; line-height: 1.4; }
+  .c-meta { margin-top: 4px; font-size: 11px; color: var(--text-muted); }
+  .c-prog { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .c-action + .c-prog { margin-top: 6px; } /* text line-height adds ~2px, so 8px visually */
+  .pbar { flex: 1; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .pbar span { display: block; height: 100%; background: var(--accent-fill); border-radius: 2px; transition: width .25s; }
+  .c-prog small { font-size: 10px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+  .c-action { display: flex; align-items: flex-start; gap: 8px; margin-top: 7px; font-size: 11px; color: var(--accent); line-height: 1.45; }
+  .c-action > span { flex: 1; min-width: 0; }
+  .c-action b { font-weight: 600; }
+  .ck { flex-shrink: 0; border: none; background: none; padding: 0; cursor: pointer; display: flex; align-items: center; justify-content: center;
+        color: transparent; font-size: 10px; line-height: 1; transition: background .15s, color .15s, border-color .15s, opacity .15s, transform .15s; }
+  .ck:focus-visible { outline: 2px solid var(--accent-border); outline-offset: 2px; }
+  /* 1 · Leading circle */
+  .c-action.v1 .ck { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--accent-fill); margin-top: 1px; }
+  .c-action.v1 .ck:hover { background: var(--accent-bg); color: var(--accent); }
+  /* Click feedback, shared */
+  .ck.checking { background: var(--accent-fill) !important; border-color: var(--accent-fill) !important; color: var(--knob) !important; opacity: 1 !important; transform: scale(1.12); }
+  .c-action.all-done { align-items: center; }
+  .link { border: none; background: none; color: var(--accent); font-size: 12px; cursor: pointer; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
+  .c-action .link { font-size: 11px; }
+
+  /* Mini app sidebar, mirrors frontend/src/App.jsx */
+  .sidebar { width: 190px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); padding: 18px 12px; display: flex; flex-direction: column; gap: 4px; }
+  .brand { display: flex; align-items: center; gap: 8px; padding: 0 10px 16px; font-size: 16px; font-weight: 600; }
+  .brand span { color: var(--accent); font-size: 18px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px; font-size: 14px; color: var(--text-secondary);
+              border: none; background: none; font-family: inherit; text-align: left; width: 100%; }
+  button.nav-item { cursor: pointer; }
+  button.nav-item:hover { background: var(--bg); }
+  .nav-item.active, button.nav-item.active:hover { background: var(--accent-bg); color: var(--accent); font-weight: 500; }
+  .nav-settings { margin-top: auto; }
+
+  /* Settings page */
+  .page[hidden] { display: none; }
+  .page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .set-body { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 28px 28px; display: flex; flex-direction: column; gap: 22px; }
+  .set-group h3 { font-size: 11px; font-weight: 600; letter-spacing: .06em; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; }
+  .set-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+  .set-row { display: flex; align-items: center; gap: 20px; padding: 16px 18px; flex-wrap: wrap; }
+  .set-row + .set-row { border-top: 1px solid var(--border); }
+  .set-text { flex: 1 1 200px; min-width: 0; }
+  .set-name { font-size: 14px; font-weight: 500; }
+  .set-desc { font-size: 12px; color: var(--text-muted); margin-top: 2px; line-height: 1.5; }
+  .choices { display: flex; gap: 8px; flex-wrap: wrap; }
+  .choice { border: 1px solid var(--border); background: var(--bg); border-radius: 10px; padding: 8px 12px; font-size: 13px; color: var(--text-secondary);
+            cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 84px; font-family: inherit; }
+  .choice:hover { border-color: var(--border-strong); color: var(--text); }
+  .choice[aria-checked='true'] { border-color: var(--accent-border); background: var(--accent-bg); color: var(--accent); font-weight: 500; box-shadow: 0 0 0 1px var(--accent-border); }
+  .choice:focus-visible { outline: 2px solid var(--accent-border); outline-offset: 2px; }
+  /* Tiny pictures of the two step views */
+  .pic { height: 26px; display: flex; align-items: center; justify-content: center; gap: 3px; }
+  .pic-stepper i { width: 12px; height: 18px; border-radius: 3px; border: 1.5px solid currentColor; opacity: .45; }
+  .pic-stepper i:nth-child(2) { width: 20px; height: 22px; opacity: 1; }
+  .pic-timeline { flex-direction: column; gap: 2px; align-items: flex-start; }
+  .pic-timeline i { display: flex; align-items: center; gap: 3px; }
+  .pic-timeline i::before { content: ''; width: 5px; height: 5px; border-radius: 50%; border: 1.5px solid currentColor; }
+  .pic-timeline i::after { content: ''; width: 24px; height: 2px; border-radius: 1px; background: currentColor; opacity: .5; }
+  .pic-fx { font-size: 16px; line-height: 26px; }
+  .dur-control { display: flex; align-items: center; gap: 10px; }
+  .dur-control input { width: 200px; accent-color: var(--accent-fill); }
+  .dur-control output { min-width: 36px; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; }
+  .dur-control.off { opacity: .45; }
+  .set-preview { display: flex; align-items: center; gap: 16px; padding: 18px; border-top: 1px solid var(--border); background: var(--bg); border-radius: 0 0 12px 12px; flex-wrap: wrap; }
+  .set-preview .card { width: 250px; cursor: default; }
+  .set-preview p { font-size: 12px; color: var(--text-muted); flex: 1 1 160px; }
+  .toggle { display: flex; align-items: center; gap: 10px; padding: 9px 12px; font-size: 14px; color: var(--text-secondary); cursor: pointer; }
+  .toggle input { position: absolute; opacity: 0; pointer-events: none; }
+  .switch { flex-shrink: 0; margin-left: auto; width: 28px; height: 16px; border-radius: 999px; background: var(--border); position: relative; transition: background .15s; }
+  .switch::after { content: ''; position: absolute; left: 2px; top: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--knob); transition: left .15s; }
+  .toggle input:checked + .switch { background: var(--accent-fill); }
+  .toggle input:checked + .switch::after { left: 14px; }
+  .toggle input:focus-visible + .switch { outline: 2px solid var(--accent-border); outline-offset: 2px; }
+  .streak-card { margin-top: 6px; background: var(--bg); border-radius: 10px; padding: 12px; }
+  .streak-card p { font-size: 12px; color: var(--text-muted); }
+  .streak-card b { display: block; font-size: 18px; margin-top: 2px; }
+  .board-area { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+  /* Expanded card */
+  .modal-root { position: absolute; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .scrim { position: absolute; inset: 0; background: var(--scrim); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  .modal { position: relative; width: min(600px, 100%); max-height: 100%; display: flex; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); transform-origin: top left; outline: none; }
+  .m-body { flex: 1; min-width: 0; overflow-y: auto; padding: 18px 24px 16px; display: flex; flex-direction: column; gap: 14px; }
+  .m-head { display: flex; justify-content: space-between; align-items: center; }
+  .crumb { font-size: 12px; color: var(--text-muted); }
+  .x { border: none; background: none; font-size: 22px; line-height: 1; color: var(--text-muted); cursor: pointer; }
+  .x:hover { color: var(--text); }
+  .m-title { font-size: 20px; font-weight: 600; line-height: 1.3; }
+  .m-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .pill { font-size: 12px; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 999px; padding: 4px 10px; }
+  .label { font-size: 11px; color: var(--text-muted); }
+  .steps-head { display: flex; align-items: center; gap: 10px; }
+  .steps-head .label { font-weight: 600; letter-spacing: .04em; }
+  .steps-head .pbar { max-width: 110px; }
+  .steps-head small { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .edit-btn { margin-left: auto; border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer; display: inline-flex; gap: 5px; align-items: center; }
+  .edit-btn:hover { border-color: var(--border-strong); color: var(--text); }
+  .primary { border: none; background: var(--accent); color: var(--on-accent); border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 500; cursor: pointer; }
+  .primary:hover { filter: brightness(1.08); }
+
+  /* Stepper: horizontally scrolling step cards */
+  .stepper { display: flex; flex-direction: column; gap: 10px; }
+  .dots-row { display: flex; align-items: center; gap: 12px; }
+  .dots { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .dots button { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--border-strong); background: var(--surface); font-size: 10px; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: box-shadow .15s; }
+  .dots button.done { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--knob); }
+  .dots button.current { border: 2px solid var(--accent-fill); color: var(--accent); font-weight: 600; }
+  .dots button.viewing { box-shadow: 0 0 0 3px var(--accent-bg), 0 0 0 4px var(--accent-border); }
+  .dots i { flex: 0 0 10px; height: 2px; background: var(--border); }
+  .dots i.done { background: var(--accent-border); }
+  .jump { margin-left: auto; font-size: 12px; }
+  .jump[hidden] { display: none; }
+
+  .carousel { position: relative; --sw: min(380px, 74%); }
+  .track { position: relative; display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
+           padding: 6px 0 10px; cursor: grab; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+  .track::-webkit-scrollbar { display: none; }
+  .track.dragging { scroll-snap-type: none; cursor: grabbing; user-select: none; }
+  .spacer { flex: 0 0 calc((100% - var(--sw)) / 2 - 12px); }
+  .slide { flex: 0 0 var(--sw); scroll-snap-align: center; min-height: 138px; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px;
+           display: flex; flex-direction: column; gap: 4px; background: var(--surface); opacity: .5; transform: scale(.96);
+           transition: opacity .2s, transform .2s, box-shadow .2s; user-select: none; }
+  .slide.viewing { opacity: 1; transform: none; box-shadow: var(--shadow-md); }
+  .slide.current { background: var(--accent-bg); border-color: var(--accent-border); }
+  .slide .s-label { font-size: 11px; font-weight: 600; color: var(--text-muted); letter-spacing: .02em; }
+  .slide.current .s-label { color: var(--accent); }
+  .slide .s-text { font-size: 16px; font-weight: 500; line-height: 1.4; }
+  .slide.done .s-text { color: var(--text-secondary); }
+  .slide .s-foot { margin-top: auto; padding-top: 10px; display: flex; gap: 12px; align-items: center; }
+  .s-meta { font-size: 11px; color: var(--text-muted); }
+  .arrow { position: absolute; top: calc(50% - 2px); transform: translateY(-50%); z-index: 1; width: 34px; height: 34px; border-radius: 50%;
+           border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); font-size: 18px; line-height: 1; cursor: pointer;
+           box-shadow: var(--shadow-md); display: flex; align-items: center; justify-content: center; transition: opacity .15s; }
+  .arrow:hover { color: var(--text); border-color: var(--border-strong); }
+  .arrow.prev { left: 0; } .arrow.next { right: 0; }
+  .arrow:disabled { opacity: 0; pointer-events: none; }
+
+  /* Timeline: all steps in a vertical list, scrolled to the current one */
+  .timeline { position: relative; max-height: 268px; overflow-y: auto; padding: 4px 2px 4px 0; list-style: none;
+              mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%); }
+  .step { position: relative; display: flex; gap: 12px; padding: 6px 0; }
+  .step:not(:last-child)::after { content: ''; position: absolute; left: 10px; top: 30px; bottom: -6px; width: 2px; background: var(--border); }
+  .step.done:not(:last-child)::after { background: var(--accent-border); }
+  .dot { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--border-strong); background: var(--surface); display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--knob); margin-top: 1px; padding: 0; }
+  .step.done .dot { background: var(--accent-fill); border-color: var(--accent-fill); cursor: pointer; }
+  .step.done .dot:hover { opacity: .75; }
+  .step.current .dot { border: 2px solid var(--accent-fill); box-shadow: 0 0 0 4px var(--accent-bg); }
+  .step .s-text { font-size: 14px; line-height: 1.45; }
+  .step.done .s-text { color: var(--text-secondary); text-decoration: line-through; text-decoration-color: var(--border-strong); }
+  .step.upcoming .s-text { color: var(--text-secondary); }
+  .cur { flex: 1; background: var(--accent-bg); border: 1px solid var(--accent-border); border-radius: 10px; padding: 10px 12px; }
+  .cur .s-label { font-size: 11px; font-weight: 600; color: var(--accent); letter-spacing: .02em; }
+  .cur .s-text { font-size: 15px; font-weight: 500; margin: 3px 0 10px; }
+
+  .alldone { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+  .alldone span { margin-right: auto; }
+  textarea { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; font-size: 13px; font-family: inherit; color: var(--text); resize: vertical; outline: none; }
+  textarea:focus { border-color: var(--accent); }
+  .m-foot { font-size: 11px; color: var(--text-muted); }
+
+  /* Step editor (opens over the expanded card) */
+  .editor { position: absolute; inset: 0; z-index: 3; background: var(--surface); border-radius: 14px; display: flex; flex-direction: column; }
+  .ed-head { padding: 18px 24px 10px; display: flex; align-items: baseline; gap: 12px; }
+  .ed-head h3 { font-size: 16px; font-weight: 600; }
+  .ed-head p { font-size: 12px; color: var(--text-muted); }
+  .ed-list { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 24px 10px; display: flex; flex-direction: column; gap: 8px; list-style: none; }
+  .bubble { position: relative; display: flex; align-items: center; gap: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 999px;
+            padding: 7px 8px 7px 10px; font-size: 13px; line-height: 1.4; user-select: none; cursor: grab; touch-action: none; }
+  .bubble:hover { border-color: var(--border-strong); }
+  .bubble:focus-visible { outline: 2px solid var(--accent-border); outline-offset: 2px; }
+  .bubble.shifting { transition: transform .15s ease; }
+  .bubble.lifted { z-index: 2; cursor: grabbing; background: var(--surface); border-color: var(--accent-border); box-shadow: var(--shadow-md); }
+  .bubble.settling { transition: transform .15s ease; }
+  .bubble.locked { cursor: default; opacity: .6; }
+  .bubble .grip { color: var(--text-muted); font-size: 14px; line-height: 1; letter-spacing: -1px; }
+  .bubble .num { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--border-strong); display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--text-muted); }
+  .bubble.locked .num { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--knob); }
+  .bubble.is-current .num { border: 2px solid var(--accent-fill); color: var(--accent); font-weight: 600; }
+  .bubble .bt { flex: 1; min-width: 0; border-radius: 6px; padding: 2px 4px; outline: none; }
+  .bubble .bt[contenteditable] { background: var(--surface); box-shadow: 0 0 0 1.5px var(--accent); cursor: text; user-select: text; }
+  .bubble .tag { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; padding-right: 6px; }
+  .bubble.is-current .tag { color: var(--accent); }
+  .bubble .del { width: 24px; height: 24px; border: none; border-radius: 50%; background: none; color: var(--text-muted); font-size: 16px; cursor: pointer; opacity: 0; transition: opacity .15s; }
+  .bubble:hover .del, .bubble:focus-within .del { opacity: 1; }
+  .bubble .del:hover { background: var(--surface); color: var(--text); }
+  @media (hover: none) { .bubble .del { opacity: 1; } }
+  .ed-add { padding: 0 24px; }
+  .ed-add input { width: 100%; background: none; border: 1px dashed var(--border-strong); border-radius: 999px; padding: 8px 14px; font-size: 13px; color: var(--text); font-family: inherit; outline: none; }
+  .ed-add input:focus { border-style: solid; border-color: var(--accent); background: var(--bg); }
+  .ed-foot { padding: 14px 24px 18px; display: flex; justify-content: flex-end; gap: 10px; align-items: center; }
+  .ed-foot .ghost { font-size: 13px; padding: 6px 14px; border-radius: 8px; }
+
+  /* Undo toast */
+  .toast { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 20; display: flex; gap: 14px; align-items: center;
+           background: var(--text); color: var(--bg); border-radius: 10px; padding: 9px 14px; font-size: 13px; box-shadow: var(--shadow-md); max-width: calc(100% - 32px); }
+  .toast span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .toast button { border: none; background: none; color: var(--accent-border); font-weight: 600; font-size: 13px; cursor: pointer; }
+
+  /* Celebrations: particles live in a fixed layer above everything, never block clicks */
+  .fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 1000; overflow: hidden; }
+  .fx { position: absolute; left: 0; top: 0; will-change: transform, opacity; }
+  .fx-word { position: absolute; left: 0; top: 0; white-space: nowrap; font-size: 12px; font-weight: 700; letter-spacing: .01em;
+             color: var(--accent); background: var(--surface); border: 1px solid var(--accent-border); border-radius: 999px; padding: 2px 9px;
+             box-shadow: var(--shadow-md); will-change: transform, opacity; }
+  .fx-word.big { font-size: 14px; padding: 3px 11px; }
+  .fx-demo { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .fx-demo .card { width: 260px; cursor: default; }
+  .fx-demo p { font-size: 12px; color: var(--text-muted); flex-basis: 100%; }
+
+  /* Notes */
+  .notes { margin-top: 20px; font-size: 13px; line-height: 1.65; color: var(--text-secondary); display: grid; gap: 14px; }
+  .notes h3 { font-size: 13px; color: var(--text); margin-bottom: 2px; }
+  .notes ul { margin-left: 18px; }
+  .notes code { font-size: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+
+  @media (max-width: 760px) {
+    .cols { flex-direction: column; }
+    .frame { height: auto; min-height: 640px; }
+    .frame { flex-direction: column; }
+    .sidebar { width: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="toolbar">
+    <h1>Task steps: prototype, round 7</h1>
+    <button class="ghost" id="reset">Reset demo</button>
+  </div>
+
+  <div class="try">
+    <b>Try it:</b>
+    <ol>
+      <li>Open <b>⚙️ Settings</b> in the sidebar. Pick the <b>Steps view</b>, the <b>Celebration style</b> and its <b>duration</b> (up to 5s). Each celebration change plays a preview right there. Then go back to <b>Board</b> and open <b>Download insurance docs</b>.</li>
+      <li>Stepper: swipe or drag the step cards, or use ‹ ›, the dots, or ←/→. Timeline: scroll up to see finished steps.</li>
+      <li>Tick the ring in front of an In progress card's step to finish it without opening the card. Finishing a step on a <b>To do</b> card moves it to In progress.</li>
+      <li><b>✎ Edit steps</b> works in both views: hold and drag to reorder, click text to rename.</li>
+    </ol>
+  </div>
+
+  <div class="frame" id="frame">
+    <aside class="sidebar">
+      <div class="brand"><span>◎</span>Recenter</div>
+      <div class="nav-item">💬 Coach</div>
+      <div class="nav-item">☀️ Today</div>
+      <button class="nav-item active" data-page="board">🗂️ Board</button>
+      <div class="nav-item">🎯 Identity</div>
+      <div class="nav-item">📈 Progress</div>
+      <button class="nav-item nav-settings" data-page="settings">⚙️ Settings</button>
+      <label class="toggle"><span id="themeIcon">🌙</span>Dark mode<input type="checkbox" id="darkToggle" /><span class="switch" aria-hidden="true"></span></label>
+      <div class="streak-card"><p>Current streak</p><b>— days</b></div>
+    </aside>
+    <div class="board-area">
+      <div class="page" id="page-board">
+        <div class="board-head"><h2>Board</h2><span>Prototype data, nothing is saved</span></div>
+        <div class="cols" id="cols"></div>
+      </div>
+      <div class="page" id="page-settings" hidden>
+        <div class="board-head"><h2>Settings</h2><span>Remembered in this browser</span></div>
+        <div class="set-body">
+          <section class="set-group">
+            <h3>Tasks</h3>
+            <div class="set-card">
+              <div class="set-row">
+                <div class="set-text"><p class="set-name">Steps view</p><p class="set-desc">How a task's steps look when you open its card.</p></div>
+                <div class="choices" role="radiogroup" aria-label="Steps view" id="setView">
+                  <button class="choice" role="radio" data-view="stepper"><span class="pic pic-stepper"><i></i><i></i><i></i></span>Stepper</button>
+                  <button class="choice" role="radio" data-view="timeline"><span class="pic pic-timeline"><i></i><i></i><i></i></span>Timeline</button>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section class="set-group">
+            <h3>Celebrations</h3>
+            <div class="set-card">
+              <div class="set-row">
+                <div class="set-text"><p class="set-name">Style</p><p class="set-desc">What goes off when you finish a step, move a card forward, or finish a task.</p></div>
+                <div class="choices" role="radiogroup" aria-label="Celebration style" id="setFx">
+                  <button class="choice" role="radio" data-fx="A"><span class="pic pic-fx">🎊</span>Confetti</button>
+                  <button class="choice" role="radio" data-fx="B"><span class="pic pic-fx">✨</span>Sparks</button>
+                  <button class="choice" role="radio" data-fx="C"><span class="pic pic-fx">🎉</span>Popper + cheer</button>
+                  <button class="choice" role="radio" data-fx="off"><span class="pic pic-fx">○</span>Off</button>
+                </div>
+              </div>
+              <div class="set-row">
+                <div class="set-text"><p class="set-name">Duration</p><p class="set-desc">How long each celebration lasts. Longer ones fall further.</p></div>
+                <div class="dur-control" id="durControl">
+                  <input type="range" id="durRange" min="0.6" max="5" step="0.1" value="1.6" aria-label="Celebration duration in seconds" aria-describedby="durOut" />
+                  <output id="durOut">1.6s</output>
+                </div>
+              </div>
+              <div class="set-preview">
+                <div class="card in_progress" id="previewCard"><p class="c-title">Preview card</p><p class="c-meta">Your celebrations play here</p>
+                  <div class="c-action v1"><button class="ck" tabindex="-1" aria-hidden="true">✓</button><span><b>Next action:</b> Try a style</span></div></div>
+                <button class="ghost" id="previewBtn">▶ Preview</button>
+                <p>Changing the style or letting go of the slider plays a preview here.</p>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <p class="section-title">Celebrations: fire each moment as often as you like (uses your Settings)</p>
+  <div class="fx-demo">
+    <button class="primary" data-demo="step">✓ Mark done (big card)</button>
+    <button class="ghost" data-demo="ring">Tick ring on card</button>
+    <button class="ghost" data-demo="move">Card moves forward →</button>
+    <button class="ghost" data-demo="done">Task done</button>
+    <div class="card in_progress" id="demoCard"><p class="c-title">Download insurance docs from employer portal</p><p class="c-meta">Get a medical checkup · Life · 10m</p>
+      <div class="c-action v1"><button class="ck" tabindex="-1" aria-hidden="true">✓</button><span><b>Next action:</b> Download the insurance card PDF</span></div></div>
+    <p>On the board, celebrations burst out from around the whole card. Ticking the ring is the smallest, a card moving forward is bigger and gives the card a bump, and finishing a task is the biggest. In the open card, Mark done bursts from the button.</p>
+  </div>
+
+  <div class="notes">
+    <div>
+      <h3>Round 4: celebrations (pick A, B or C)</h3>
+      <ul>
+        <li><b>A · Confetti:</b> a small ring of confetti bits pops out of the button and falls. Classic party popper.</li>
+        <li><b>B · Sparks:</b> a quick firework of short sparks plus a ring pulse. The streaks droop and fall like a firework.</li>
+        <li><b>C · Popper + cheer:</b> confetti shoots upward and a tiny word floats up: "Nice!", "One down", "Crushed it". This is the "atta boy" one. The words are picked at random, so it doesn't get stale.</li>
+        <li><b>Round 5:</b> everything is bigger. On the board the burst comes out from around the <b>whole card outline</b> (with a quick outline flash), not just the ring.</li>
+        <li><b>Round 6:</b> pieces now fall under gravity with a little sway, and the <b>Duration</b> slider (0.6–3s) sets how long every burst lasts. Longer means they fall further. Pick the duration that feels right.</li>
+        <li><b>Round 7:</b> the duration now goes up to <b>5s</b>. Steps view, celebration style and duration all live on a <b>Settings</b> page, under a new Settings item at the bottom of the sidebar. Choosing a style, or letting go of the duration slider, plays a preview on the page. Dark mode stays in the sidebar for quick access.</li>
+        <li><b>Three sizes:</b> step done &lt; card moves forward (plus a card bump) &lt; task done. It only plays on forward moves; dragging a card backwards or undoing a step is silent.</li>
+        <li><b>Rules for all:</b> it plays at the button or card you used, never across the screen. It lasts as long as the Duration slider says, never blocks clicks, and is off for anyone whose system asks for reduced motion. No sound for now; a soft pop could be a later setting.</li>
+        <li>Points and the Oregon Trail travellers come later. Steps already record when they were finished, so points can be worked out later from that history.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Decided in round 1 (Nitin)</h3>
+      <ul>
+        <li><b>Stepper layout</b> for the expanded card. Steps are cards in a horizontal strip with snap scrolling: trackpad/touch swipe, mouse drag, side arrows, dots, ←/→. Neighbouring steps peek in at the edges, so you can see there's more on each side.</li>
+        <li>Completing a step on a <b>To do</b> task moves it to <b>In progress</b>, from the big card or the collapsed check.</li>
+        <li>Steps are <b>editable</b>, but behind an <b>Edit steps</b> button because it's not an everyday action. The editor shows steps as bubbles: hold and drag to reorder, click text to rename, × to delete, plus add. Nothing changes until Save, and Cancel/Esc throws the edits away.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Decided in round 2 (Nitin)</h3>
+      <ul>
+        <li>Collapsed check: <b>option 1, the leading circle.</b> The gap above and below the step line is now even (8px each), and the ring is centred on the first line of text.</li>
+        <li><b>Steps view, Stepper / Timeline</b>: first in the sidebar above Dark mode, moved to Settings in round 7. It's remembered per browser, like the theme. Both views share Mark done, Undo and Edit steps.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Labels (unchanged)</h3>
+      <ul>
+        <li>The current step is the first one that isn't done. Collapsed In progress cards call it <b>First action</b>, <b>Next action</b> or <b>Last action</b>, depending on where that step sits in the list. Reordering steps in the editor can change the label.</li>
+        <li>A progress bar (2/5) shows on To do and In progress cards once any step is done.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Choices I made, push back if wrong</h3>
+      <ul>
+        <li>In the editor, <b>finished steps are locked</b> at the top (shown, not draggable). They're history. To reorder one, undo it first.</li>
+        <li>Ticking the collapsed check shows a 5-second <b>Undo</b> toast, because it's a small target next to a card that opens on click.</li>
+        <li>The collapsed check appears on In progress cards only, since those are the only collapsed cards that show the step text.</li>
+        <li>Keyboard: in the editor, focus a bubble and press <b>Alt+↑/↓</b> to move it, or <b>Enter</b> to rename it.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Implementation sketch (after approval)</h3>
+      <ul>
+        <li>New table <code>task_steps</code> (id, task_id, position, text, done_at). Each existing <code>first_action</code> becomes step 1. This is a schema change, so <code>rm recenter.db</code> + re-seed.</li>
+        <li>Task payloads include <code>steps</code>. Endpoints: complete/undo a step (complete also moves To do → In progress), and replace the step list (the editor's Save).</li>
+        <li>Bigger than REC-27, so it wants its own story from the lead. REC-10's planner will write these steps.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+const s = (text, at) => ({ text, done: !!at, at: at || null })
+const INITIAL = [
+  { id: 1, title: 'Download insurance docs from employer portal', story: 'Get a medical checkup', epic: 'Life', est: 10, status: 'in_progress',
+    note: 'HR said the portal login is the same as the payroll one.',
+    steps: [s('Log in to the HR portal', 'Thu 4:12 PM'), s('Open Benefits → Documents', 'Thu 4:20 PM'),
+            s('Download the insurance card PDF'), s('Download the coverage summary'), s('Save both to a "Medical" folder')] },
+  { id: 2, title: 'Book the hospital appointment', story: 'Get a medical checkup', epic: 'Life', est: 15, status: 'in_progress', note: '',
+    steps: [s('Find the clinic number on the insurance list', 'Fri 9:02 AM'), s('Pick two time slots that work', 'Fri 9:10 AM'),
+            s('Call the clinic and book one')] },
+  { id: 3, title: 'Find what your insurance covers & where', story: 'Get a medical checkup', epic: 'Life', est: 25, status: 'todo', note: '',
+    steps: [s('Open the coverage summary PDF', 'Fri 8:40 AM'), s('Find the preventive-care section'), s('List two in-network clinics nearby')] },
+  { id: 4, title: 'Pick a product and order it', story: 'Protect the car from afternoon heat', epic: 'Life', est: 20, status: 'todo', note: '',
+    steps: [s('Open the two links from research'), s('Compare reviews side by side'), s('Order the winner')] },
+  { id: 5, title: "Pick this week's recipe", story: 'Cook one new recipe a week', epic: 'Cooking', est: 10, status: 'todo', note: '',
+    steps: [s('Open the saved-recipes folder'), s('Choose one and add ingredients to the list')] },
+  { id: 6, title: 'Sketch the board layout', story: 'Ship the Recenter board', epic: 'Projects', est: 20, status: 'done', note: '',
+    steps: [s('Open the mockup', 'Wed 7:30 PM'), s('List the card types', 'Wed 7:45 PM')] },
+]
+const STATUSES = [['todo', 'To do'], ['in_progress', 'In progress'], ['done', 'Done']]
+let tasks = structuredClone(INITIAL)
+// User settings (Settings page), remembered per browser.
+const SETTINGS_KEY = 'recenter-settings'
+let saved = {}
+try { saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') } catch {}
+let stepsView = saved.stepsView === 'timeline' ? 'timeline' : 'stepper'
+function saveSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ stepsView, fxStyle, fxDur })) } catch {}
+}
+let open = null // { id, view, banner, root, card, editing }
+let toast = null
+
+const $ = (sel, el = document) => el.querySelector(sel)
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
+const byId = (id) => tasks.find((t) => t.id === id)
+const currentIdx = (t) => t.steps.findIndex((st) => !st.done)
+const doneCount = (t) => t.steps.filter((st) => st.done).length
+const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches
+const EASE = 'cubic-bezier(0.2, 0.8, 0.2, 1)'
+
+/* ---------- Celebrations ---------- */
+let fxStyle = ['A', 'B', 'C', 'off'].includes(saved.fxStyle) ? saved.fxStyle : 'A'
+let fxDur = Math.min(5000, Math.max(600, Number(saved.fxDur) || 1600)) // ms, Settings → Duration
+const fallPx = () => 50 + 60 * (fxDur / 1000) // longer bursts fall further
+
+// Shoot out to (dx, dy), then fall under gravity with a little sway.
+function fallFrames(dx, dy, spin, { s0 = 0.4, o0 = 1 } = {}) {
+  const fall = fallPx() * rand(0.8, 1.2), sway = rand(-16, 16)
+  const at = (x, y) => `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`
+  return [
+    { offset: 0, transform: `translate(-50%, -50%) scale(${s0})`, opacity: o0, easing: 'cubic-bezier(.15, .75, .35, 1)' },
+    { offset: 0.2, transform: `${at(dx, dy)} rotate(${spin * 0.25}deg) scale(1)`, opacity: 1, easing: 'cubic-bezier(.4, 0, .8, .6)' },
+    { offset: 0.55, transform: `${at(dx * 1.06 + sway, dy + fall * 0.35)} rotate(${spin * 0.6}deg) scale(1)`, opacity: 1, easing: 'linear' },
+    { offset: 0.82, transform: `${at(dx * 1.1 - sway * 0.4, dy + fall * 0.72)} rotate(${spin * 0.85}deg) scale(.95)`, opacity: 0.9, easing: 'linear' },
+    { offset: 1, transform: `${at(dx * 1.12, dy + fall)} rotate(${spin}deg) scale(.85)`, opacity: 0 },
+  ]
+}
+const FX_COLORS = ['#378add', '#f2a93b', '#e8735a', '#4fb286', '#9b7be0', '#f4c542']
+const TIERS = {
+  step: { n: 22, dist: [40, 78], size: 1, words: ['Nice!', 'Yes!', 'One down', 'Keep going', 'Done!', 'Good move'] },
+  move: { n: 30, dist: [48, 92], size: 1.1, words: ['On the move', 'Here we go', 'Started!', 'Momentum'] },
+  done: { n: 46, dist: [70, 130], size: 1.25, words: ['Task done!', 'Crushed it', "That's a wrap", 'Nailed it'] },
+}
+const ORDER = { todo: 0, in_progress: 1, done: 2 }
+const fxLayer = document.createElement('div')
+fxLayer.className = 'fx-layer'
+document.body.appendChild(fxLayer)
+const rand = (a, b) => a + Math.random() * (b - a)
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
+
+// `around: true` bursts out of a card's whole outline instead of one point.
+function celebrate(rect, tier = 'step', { around = false } = {}) {
+  if (fxStyle === 'off' || !rect || reduced()) return
+  const T = TIERS[tier]
+  if (around) return aroundCard(rect, T)
+  const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2
+  if (fxStyle === 'A') confetti(cx, cy, T, 0, Math.PI * 2)
+  if (fxStyle === 'B') sparks(cx, cy, T, rect)
+  if (fxStyle === 'C') { confetti(cx, cy, T, -Math.PI * 0.85, -Math.PI * 0.15, true); cheer(cx, rect.top, T) }
+}
+
+// A random point on the card's outline plus the outward direction there.
+function edgePoint(r, upward) {
+  const w = r.width, h = r.height
+  const sides = upward ? [['top', w * 1.6], ['left', h], ['right', h], ['bottom', w * 0.3]] : [['top', w], ['bottom', w], ['left', h], ['right', h]]
+  let roll = Math.random() * sides.reduce((a, [, len]) => a + len, 0), side = sides[0][0]
+  for (const [name, len] of sides) { if ((roll -= len) <= 0) { side = name; break } }
+  const t = Math.random(), j = rand(-0.45, 0.45)
+  if (side === 'top') return { x: r.left + t * w, y: r.top, a: -Math.PI / 2 + j + (t - 0.5) * 0.9 }
+  if (side === 'bottom') return { x: r.left + t * w, y: r.bottom, a: Math.PI / 2 + j - (t - 0.5) * 0.9 }
+  if (side === 'left') return { x: r.left, y: r.top + t * h, a: Math.PI + j - (t - 0.5) * 0.7 }
+  return { x: r.right, y: r.top + t * h, a: j + (t - 0.5) * 0.7 }
+}
+
+function aroundCard(r, T) {
+  outlinePulse(r)
+  const upward = fxStyle === 'C'
+  const count = Math.round(T.n * 1.25)
+  for (let i = 0; i < count; i++) {
+    const { x, y, a } = edgePoint(r, upward)
+    const d = rand(...T.dist) * 0.62
+    if (fxStyle === 'B') { spark(x, y, a, d, T); continue }
+    const el = particle(x, y, pick(FX_COLORS), T.size * 1.15)
+    el.animate(fallFrames(Math.cos(a) * d, Math.sin(a) * d, rand(-460, 460), { s0: 0.3, o0: 0 }),
+      { duration: fxDur * rand(0.88, 1.12), delay: rand(0, 90), fill: 'backwards' }).finished.then(() => el.remove())
+  }
+  if (fxStyle === 'C') cheer(r.left + r.width / 2, r.top, T, true)
+}
+
+// The card's outline flashes and expands outward once.
+function outlinePulse(r) {
+  const el = document.createElement('span')
+  el.className = 'fx'
+  el.style.cssText = `left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;border-radius:10px;border:2px solid ${FX_COLORS[0]}`
+  fxLayer.appendChild(el)
+  el.animate([{ transform: 'scale(1)', opacity: 0.8 }, { transform: `scale(${1 + 24 / r.width}, ${1 + 24 / r.height})`, opacity: 0 }],
+    { duration: 520, easing: 'cubic-bezier(.2, .8, .3, 1)' }).finished.then(() => el.remove())
+}
+
+// A streak that flies outward, then droops and falls (gravity is applied in
+// screen space, before the rotation).
+function spark(x, y, a, d, T, r0 = 0) {
+  const el = document.createElement('span')
+  el.className = 'fx'
+  const len = rand(13, 20) * T.size
+  el.style.cssText = `width:${len}px;height:3.5px;border-radius:2px;background:${pick(FX_COLORS)};left:${x}px;top:${y}px;transform-origin:0 50%`
+  fxLayer.appendChild(el)
+  const deg = (a * 180) / Math.PI, fall = fallPx() * 0.7 * rand(0.8, 1.2)
+  const f = (dropY, r, sx) => `translateY(${dropY}px) translateY(-50%) rotate(${deg}deg) translateX(${r}px) scaleX(${sx})`
+  el.animate([
+    { offset: 0, transform: f(0, r0, 0.3), opacity: 1, easing: 'cubic-bezier(.2, .8, .3, 1)' },
+    { offset: 0.3, transform: f(0, d, 1), opacity: 1, easing: 'cubic-bezier(.4, 0, .8, .6)' },
+    { offset: 0.75, transform: f(fall * 0.55, d * 1.15, 0.7), opacity: 0.85, easing: 'linear' },
+    { offset: 1, transform: f(fall, d * 1.22, 0.3), opacity: 0 },
+  ], { duration: fxDur * rand(0.85, 1.1), delay: rand(0, 60), fill: 'backwards' }).finished.then(() => el.remove())
+}
+
+function particle(x, y, color, k = 1) {
+  const el = document.createElement('span')
+  el.className = 'fx'
+  const shape = Math.random()
+  const w = (shape < 0.4 ? rand(6, 8) : rand(4, 5)) * k, h = shape < 0.4 ? w : rand(9, 12) * k
+  el.style.cssText = `width:${w}px;height:${h}px;background:${color};border-radius:${shape < 0.25 ? '50%' : '1px'};left:${x}px;top:${y}px`
+  fxLayer.appendChild(el)
+  return el
+}
+
+// Burst out between angles a0..a1, then fall.
+function confetti(cx, cy, T, a0, a1, cone = false) {
+  for (let i = 0; i < T.n; i++) {
+    const el = particle(cx, cy, pick(FX_COLORS), T.size)
+    const a = a0 + (a1 - a0) * ((i + Math.random() * 0.8) / T.n)
+    const d = rand(...T.dist) * (cone ? 1.15 : 1)
+    el.animate(fallFrames(Math.cos(a) * d, Math.sin(a) * d, rand(-420, 420)), { duration: fxDur * rand(0.88, 1.12) })
+      .finished.then(() => el.remove())
+  }
+}
+
+function sparks(cx, cy, T, rect) {
+  const ring = document.createElement('span')
+  ring.className = 'fx'
+  const size = Math.max(rect.height, 24)
+  ring.style.cssText = `width:${size}px;height:${size}px;left:${cx}px;top:${cy}px;border-radius:50%;border:2px solid ${FX_COLORS[0]}`
+  fxLayer.appendChild(ring)
+  ring.animate([{ transform: 'translate(-50%, -50%) scale(.6)', opacity: .7 }, { transform: 'translate(-50%, -50%) scale(2.2)', opacity: 0 }],
+    { duration: 600, easing: 'cubic-bezier(.2, .8, .3, 1)' }).finished.then(() => ring.remove())
+  const n = Math.round(T.n * 0.75)
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + rand(-0.14, 0.14)
+    spark(cx, cy, a, rand(...T.dist) * 0.85, T, size * 0.45)
+  }
+}
+
+function cheer(cx, top, T, big = false) {
+  const el = document.createElement('span')
+  el.className = 'fx-word' + (big ? ' big' : '')
+  el.textContent = pick(T.words)
+  el.style.left = `${cx}px`
+  el.style.top = `${top}px`
+  fxLayer.appendChild(el)
+  el.animate([
+    { transform: 'translate(-50%, -60%) scale(.7)', opacity: 0 },
+    { transform: 'translate(-50%, -140%) scale(1.06)', opacity: 1, offset: 0.25 },
+    { transform: 'translate(-50%, -170%) scale(1)', opacity: 1, offset: 0.7 },
+    { transform: 'translate(-50%, -210%) scale(.96)', opacity: 0 },
+  ], { duration: Math.max(1100, fxDur * 0.9), easing: 'cubic-bezier(.2, .8, .3, 1)' }).finished.then(() => el.remove())
+}
+
+// A card that moved forward gets a quick bump and glow.
+function bump(el) {
+  if (!el || fxStyle === 'off' || reduced()) return
+  el.animate([
+    { transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' },
+    { transform: 'scale(1.035)', boxShadow: '0 0 0 4px var(--accent-bg)', offset: 0.4 },
+    { transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' },
+  ], { duration: 380, easing: EASE })
+}
+
+// Status changes: celebrate only forward moves, at the card's new spot.
+function celebrateMove(t, before) {
+  if (ORDER[t.status] <= ORDER[before]) return
+  const el = $(`#cols .card[data-id="${t.id}"]`)
+  if (!el || el.classList.contains('hidden')) return
+  bump(el)
+  celebrate(el.getBoundingClientRect(), t.status === 'done' ? 'done' : 'move', { around: true })
+}
+
+// The naming rule: position of the current step decides the label.
+function actionLabel(t, i = currentIdx(t)) {
+  if (i < 0) return null
+  if (i === 0) return 'First action'
+  if (i === t.steps.length - 1) return 'Last action'
+  return 'Next action'
+}
+
+/* ---------- Step state changes ---------- */
+const snapshot = (t) => ({ id: t.id, steps: structuredClone(t.steps), status: t.status })
+function restore(snap) {
+  const t = byId(snap.id); t.steps = snap.steps; t.status = snap.status
+}
+
+// Completing a step on a To do task moves it to In progress (Nitin, round 1).
+function completeStep(t, i) {
+  const snap = snapshot(t)
+  t.steps[i].done = true
+  t.steps[i].at = 'just now'
+  const moved = t.status === 'todo'
+  if (moved) t.status = 'in_progress'
+  return { snap, moved }
+}
+
+/* ---------- Board ---------- */
+function renderBoard() {
+  $('#cols').innerHTML = STATUSES.map(([key, label]) => {
+    const cards = tasks.filter((t) => t.status === key)
+    return `<section class="col" data-status="${key}">
+      <p class="col-title">${label.toUpperCase()} · ${cards.length}</p>
+      ${cards.map((t) => cardHtml(t)).join('')}
+      ${cards.length ? '' : '<div class="hint">drag cards here</div>'}
+    </section>`
+  }).join('')
+}
+
+function cardHtml(t) {
+  const i = currentIdx(t), n = t.steps.length, d = doneCount(t)
+  const meta = [t.story, t.epic, t.status !== 'done' ? `${t.est}m` : null].filter(Boolean).join(' · ')
+  let action = ''
+  if (t.status === 'in_progress' && i >= 0) {
+    const text = `<span><b>${actionLabel(t)}:</b> ${esc(t.steps[i].text)}</span>`
+    const ck = `<button class="ck" data-ck="${t.id}" title="Mark done" aria-label="Mark “${esc(t.steps[i].text)}” done">✓</button>`
+    action = `<div class="c-action v1">${ck}${text}</div>`
+  } else if (t.status === 'in_progress') {
+    action = `<div class="c-action all-done"><span><b>All steps done</b></span><button class="link" data-todone="${t.id}">Move to Done</button></div>`
+  }
+  const prog = t.status !== 'done' && d > 0
+    ? `<div class="c-prog"><div class="pbar"><span style="width:${(d / n) * 100}%"></span></div><small>${d}/${n}</small></div>` : ''
+  const hidden = open && open.id === t.id ? ' hidden' : ''
+  return `<div class="card ${t.status}${hidden}" draggable="true" data-id="${t.id}">
+    <p class="c-title">${esc(t.title)}</p><p class="c-meta">${esc(meta)}</p>${action}${prog}</div>`
+}
+
+const cols = $('#cols')
+cols.addEventListener('click', (e) => {
+  const ck = e.target.closest('[data-ck]')
+  if (ck) return checkFromCard(ck)
+  const toDone = e.target.closest('[data-todone]')
+  if (toDone) { const t = byId(Number(toDone.dataset.todone)), before = t.status; t.status = 'done'; renderBoard(); return celebrateMove(t, before) }
+  const card = e.target.closest('.card')
+  if (card) openModal(Number(card.dataset.id))
+})
+cols.addEventListener('dragstart', (e) => {
+  const card = e.target.closest('.card')
+  if (card) e.dataTransfer.setData('text/plain', card.dataset.id)
+})
+cols.addEventListener('dragover', (e) => {
+  const col = e.target.closest('.col'); if (!col) return
+  e.preventDefault()
+  document.querySelectorAll('.col.over').forEach((c) => c !== col && c.classList.remove('over'))
+  col.classList.add('over')
+})
+cols.addEventListener('dragleave', (e) => {
+  const col = e.target.closest('.col')
+  if (col && !col.contains(e.relatedTarget)) col.classList.remove('over')
+})
+cols.addEventListener('drop', (e) => {
+  const col = e.target.closest('.col'); if (!col) return
+  e.preventDefault(); col.classList.remove('over')
+  const t = byId(Number(e.dataTransfer.getData('text/plain')))
+  if (t) { const before = t.status; t.status = col.dataset.status; renderBoard(); celebrateMove(t, before) }
+})
+
+// Collapsed-card check: fill the check, then swap in the next step.
+function checkFromCard(btn) {
+  const t = byId(Number(btn.dataset.ck)), i = currentIdx(t)
+  if (i < 0 || btn.classList.contains('checking')) return
+  btn.classList.add('checking')
+  celebrate(btn.closest('.card').getBoundingClientRect(), 'step', { around: true })
+  const text = t.steps[i].text
+  setTimeout(() => {
+    const { snap } = completeStep(t, i)
+    renderBoard()
+    const next = $(`.card[data-id="${t.id}"] .c-action`)
+    if (next && !reduced()) next.animate([{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: EASE })
+    showToast(`Done: ${text}`, snap)
+  }, 260)
+}
+
+function showToast(msg, snap) {
+  toast?.el.remove(); clearTimeout(toast?.timer)
+  const el = document.createElement('div')
+  el.className = 'toast'
+  el.innerHTML = `<span>${esc(msg)}</span><button>Undo</button>`
+  $('#frame').appendChild(el)
+  if (!reduced()) el.animate([{ opacity: 0, transform: 'translate(-50%, 8px)' }, { opacity: 1, transform: 'translate(-50%, 0)' }], { duration: 180, easing: EASE })
+  $('button', el).addEventListener('click', () => {
+    restore(snap); hideToast(); renderBoard()
+    if (open && open.id === snap.id) { open.view = Math.max(0, currentIdx(byId(snap.id))); open.banner = false; renderModal() }
+  })
+  toast = { el, timer: setTimeout(hideToast, 5000) }
+}
+function hideToast() { toast?.el.remove(); clearTimeout(toast?.timer); toast = null }
+
+
+/* ---------- Expanded card ---------- */
+function transformTo(el, r) {
+  const o = el.getBoundingClientRect()
+  return `translate(${r.left - o.left}px, ${r.top - o.top}px) scale(${r.width / o.width}, ${r.height / o.height})`
+}
+const cardRect = (id) => $(`.card[data-id="${id}"]`, $('#cols'))?.getBoundingClientRect()
+
+function openModal(id) {
+  const t = byId(id)
+  const origin = cardRect(id)
+  const cur = currentIdx(t)
+  open = { id, view: cur >= 0 ? cur : t.steps.length - 1, banner: false, editing: null }
+
+  const root = document.createElement('div')
+  root.className = 'modal-root'
+  root.innerHTML = `<div class="scrim"></div>
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Task details" tabindex="-1">
+      <div class="m-body">
+        <div class="m-head"><span class="crumb">${esc(t.story)} · ${esc(t.epic)}</span><button class="x" data-close aria-label="Close">×</button></div>
+        <p class="m-title">${esc(t.title)}</p>
+        <div class="m-row" id="mStatus"></div>
+        <div class="steps-head" id="mStepsHead"></div>
+        <div id="mSteps"></div>
+        <div id="mBanner"></div>
+        <label><span class="label">Note</span><textarea rows="3" id="mNote" placeholder="Anything worth remembering about this task"></textarea></label>
+        <p class="m-foot">Esc or click outside to close.</p>
+      </div>
+    </div>`
+  $('#frame').appendChild(root)
+  open.root = root
+  open.card = $('.modal', root)
+  $('#mNote', root).value = t.note
+  renderBoard() // hides the origin card
+  renderModal()
+
+  const card = open.card, body = $('.m-body', root)
+  $('.scrim', root).animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220 })
+  if (origin && !reduced()) {
+    card.animate([{ transform: transformTo(card, origin) }, { transform: 'none' }], { duration: 280, easing: EASE })
+    body.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160, delay: 130, fill: 'backwards' })
+  } else {
+    card.animate([{ opacity: 0, transform: 'scale(.97)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: EASE })
+  }
+  card.focus({ preventScroll: true })
+}
+
+function closeModal() {
+  if (!open || open.closing) return
+  open.closing = true
+  const { root, card, id } = open
+  const origin = cardRect(id)
+  const opts = { duration: 220, easing: EASE, fill: 'forwards' }
+  $('.scrim', root).animate([{ opacity: 1 }, { opacity: 0 }], opts)
+  let anim
+  if (origin && !reduced()) {
+    $('.m-body', root).animate([{ opacity: 1 }, { opacity: 0 }], { duration: 100, fill: 'forwards' })
+    anim = card.animate([{ transform: 'none' }, { transform: transformTo(card, origin) }], opts)
+  } else {
+    anim = card.animate([{ opacity: 1 }, { opacity: 0 }], opts)
+  }
+  anim.finished.then(() => { root.remove(); open = null; renderBoard() })
+}
+
+function renderModal() {
+  const t = byId(open.id), root = open.root
+  const n = t.steps.length, d = doneCount(t)
+  $('#mStatus', root).innerHTML =
+    `<span class="seg">${STATUSES.map(([k, l]) => `<button data-status="${k}" class="${t.status === k ? 'on' : ''}">${l}</button>`).join('')}</span>
+     <span class="pill">${t.est} min</span>`
+  $('#mStepsHead', root).innerHTML =
+    `<span class="label">STEPS</span><div class="pbar"><span style="width:${n ? (d / n) * 100 : 0}%"></span></div><small>${d} of ${n} done</small>
+     <button class="edit-btn" data-edit>✎ Edit steps</button>`
+  if (stepsView === 'timeline') renderTimeline(t)
+  else renderStepper(t)
+  $('#mBanner', root).innerHTML = d === n && n > 0 && t.status !== 'done' && open.banner
+    ? `<div class="alldone"><span>That was the last step. Move this task to Done?</span>
+         <button class="primary" data-act="to-done">Move to Done</button><button class="link" data-act="dismiss">Not yet</button></div>`
+    : ''
+}
+
+/* ---------- Stepper carousel ---------- */
+function slideHtml(t, st, i, cur) {
+  const n = t.steps.length
+  if (st.done) return `<div class="slide done" data-slide="${i}"><p class="s-label">STEP ${i + 1} OF ${n} · DONE ${esc(st.at).toUpperCase()}</p>
+      <p class="s-text">${esc(st.text)}</p><div class="s-foot"><button class="link" data-undo="${i}">Undo</button></div></div>`
+  if (i === cur) return `<div class="slide current" data-slide="${i}"><p class="s-label">${actionLabel(t).toUpperCase()} · STEP ${i + 1} OF ${n}</p>
+      <p class="s-text">${esc(st.text)}</p><div class="s-foot"><button class="primary" data-done="${i}">✓ Mark done</button></div></div>`
+  return `<div class="slide upcoming" data-slide="${i}"><p class="s-label">STEP ${i + 1} OF ${n} · COMING UP</p>
+      <p class="s-text">${esc(st.text)}</p><div class="s-foot"><span class="s-meta">After step ${cur + 1}</span></div></div>`
+}
+
+function renderStepper(t, { scrollTo } = {}) {
+  const host = $('#mSteps', open.root)
+  const prevLeft = $('.track', host)?.scrollLeft
+  const cur = currentIdx(t)
+  if (!t.steps.length) { host.innerHTML = '<p class="s-meta">No steps yet. Use Edit steps to add some.</p>'; return }
+  open.view = Math.min(open.view, t.steps.length - 1)
+  const dots = t.steps.map((x, i) => {
+    const sep = i ? `<i class="${t.steps[i - 1].done ? 'done' : ''}"></i>` : ''
+    return `${sep}<button class="${x.done ? 'done' : i === cur ? 'current' : ''}" data-dot="${i}" aria-label="Step ${i + 1}">${x.done ? '✓' : i + 1}</button>`
+  }).join('')
+  host.innerHTML = `<div class="stepper">
+    <div class="dots-row"><div class="dots">${dots}</div><button class="link jump" data-dot="${cur}" hidden>Back to current step</button></div>
+    <div class="carousel">
+      <button class="arrow prev" data-go="-1" aria-label="Previous step">‹</button>
+      <div class="track"><div class="spacer"></div>${t.steps.map((st, i) => slideHtml(t, st, i, cur)).join('')}<div class="spacer"></div></div>
+      <button class="arrow next" data-go="1" aria-label="Next step">›</button>
+    </div></div>`
+  const track = $('.track', host)
+  wireTrack(track)
+  if (prevLeft != null) track.scrollLeft = prevLeft
+  else scrollToIndex(open.view, 'instant')
+  if (scrollTo != null) requestAnimationFrame(() => scrollToIndex(scrollTo, 'smooth'))
+  updateViewing()
+}
+
+const slides = () => [...open.root.querySelectorAll('.slide')]
+function scrollToIndex(i, behavior = 'smooth') {
+  const track = $('.track', open.root), el = slides()[i]
+  if (!track || !el) return
+  track.scrollTo({ left: el.offsetLeft - (track.clientWidth - el.offsetWidth) / 2, behavior: reduced() ? 'instant' : behavior })
+}
+function nearestIndex() {
+  const track = $('.track', open.root), mid = track.scrollLeft + track.clientWidth / 2
+  let best = 0, dist = Infinity
+  slides().forEach((el, i) => { const d = Math.abs(el.offsetLeft + el.offsetWidth / 2 - mid); if (d < dist) { dist = d; best = i } })
+  return best
+}
+function updateViewing() {
+  const t = byId(open.id), cur = currentIdx(t), v = open.view, root = open.root
+  slides().forEach((el, i) => el.classList.toggle('viewing', i === v))
+  root.querySelectorAll('.dots button').forEach((b, i) => b.classList.toggle('viewing', i === v))
+  const prev = $('.arrow.prev', root), next = $('.arrow.next', root)
+  if (prev) prev.disabled = v === 0
+  if (next) next.disabled = v === t.steps.length - 1
+  const jump = $('.jump', root)
+  if (jump) jump.hidden = cur < 0 || v === cur
+}
+
+// Scrollable like cards: native swipe/trackpad + snap, plus mouse drag.
+function wireTrack(track) {
+  let raf = 0
+  track.addEventListener('scroll', () => {
+    cancelAnimationFrame(raf)
+    raf = requestAnimationFrame(() => { const v = nearestIndex(); if (v !== open.view) { open.view = v; updateViewing() } })
+  })
+  track.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'mouse' || e.button !== 0 || e.target.closest('button')) return
+    const startX = e.clientX, startLeft = track.scrollLeft
+    let moved = false
+    track.setPointerCapture(e.pointerId)
+    track.classList.add('dragging')
+    const move = (ev) => {
+      const dx = ev.clientX - startX
+      if (Math.abs(dx) > 3) moved = true
+      track.scrollLeft = startLeft - dx
+    }
+    const up = () => {
+      track.removeEventListener('pointermove', move)
+      track.removeEventListener('pointerup', up)
+      track.removeEventListener('pointercancel', up)
+      const target = nearestIndex()
+      scrollToIndex(target, 'smooth')
+      const unsnap = () => track.classList.remove('dragging')
+      track.addEventListener('scrollend', unsnap, { once: true })
+      setTimeout(unsnap, 450)
+      if (moved) track.addEventListener('click', (ce) => { ce.stopPropagation(); ce.preventDefault() }, { capture: true, once: true })
+    }
+    track.addEventListener('pointermove', move)
+    track.addEventListener('pointerup', up)
+    track.addEventListener('pointercancel', up)
+  })
+  // Clicking a peeking neighbour brings it to the middle.
+  track.addEventListener('click', (e) => {
+    const sl = e.target.closest('.slide')
+    if (sl && !e.target.closest('button') && Number(sl.dataset.slide) !== open.view) scrollToIndex(Number(sl.dataset.slide))
+  })
+}
+
+/* ---------- Timeline ---------- */
+function renderTimeline(t) {
+  const host = $('#mSteps', open.root)
+  const prevTop = $('.timeline', host)?.scrollTop
+  if (!t.steps.length) { host.innerHTML = '<p class="s-meta">No steps yet. Use Edit steps to add some.</p>'; return }
+  const cur = currentIdx(t), n = t.steps.length
+  host.innerHTML = `<ol class="timeline">${t.steps.map((st, i) => {
+    if (st.done) return `<li class="step done"><button class="dot" data-undo="${i}" title="Mark not done" aria-label="Mark not done">✓</button>
+        <div><p class="s-text">${esc(st.text)}</p><p class="s-meta">Done ${esc(st.at)}</p></div></li>`
+    if (i === cur) return `<li class="step current"><span class="dot"></span>
+        <div class="cur"><p class="s-label">${actionLabel(t).toUpperCase()} · STEP ${i + 1} OF ${n}</p>
+        <p class="s-text">${esc(st.text)}</p><button class="primary" data-done="${i}">✓ Mark done</button></div></li>`
+    return `<li class="step upcoming"><span class="dot"></span><p class="s-text">${esc(st.text)}</p></li>`
+  }).join('')}</ol>`
+  if (prevTop != null) $('.timeline', host).scrollTop = prevTop
+  else scrollTimelineToCurrent('instant')
+}
+function scrollTimelineToCurrent(behavior = 'smooth') {
+  const list = $('.timeline', open.root)
+  const cur = list && ($('.step.current', list) || $('.step:last-child', list))
+  if (cur) list.scrollTo({ top: Math.max(0, cur.offsetTop - 40), behavior: reduced() ? 'instant' : behavior })
+}
+
+/* ---------- Step editor ---------- */
+function openEditor() {
+  const t = byId(open.id)
+  open.editing = { done: structuredClone(t.steps.filter((x) => x.done)), list: structuredClone(t.steps.filter((x) => !x.done)) }
+  const ed = document.createElement('div')
+  ed.className = 'editor'
+  ed.setAttribute('role', 'dialog')
+  ed.setAttribute('aria-label', 'Edit steps')
+  ed.innerHTML = `<div class="ed-head"><h3>Edit steps</h3><p>Hold and drag to reorder · click text to rename</p></div>
+    <ol class="ed-list" id="edList"></ol>
+    <form class="ed-add" id="edAdd"><input placeholder="+ Add a step" aria-label="Add a step" /></form>
+    <div class="ed-foot"><button class="ghost" data-ed="cancel">Cancel</button><button class="primary" data-ed="save">Save steps</button></div>`
+  open.card.appendChild(ed)
+  open.editing.el = ed
+  wireEditor(ed)
+  renderEditor()
+  if (!reduced()) ed.animate([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 200, easing: EASE })
+}
+
+function renderEditor(focusIdx) {
+  const { done, list, el } = open.editing
+  const firstOpen = 0
+  $('#edList', el).innerHTML =
+    done.map((st) => `<li class="bubble locked"><span class="num">✓</span><span class="bt">${esc(st.text)}</span><span class="tag">done</span></li>`).join('') +
+    list.map((st, i) => `<li class="bubble${i === firstOpen ? ' is-current' : ''}" data-i="${i}" tabindex="0" aria-label="Step ${done.length + i + 1}: ${esc(st.text)}. Alt+arrow keys to move.">
+        <span class="grip" aria-hidden="true">⠿</span><span class="num">${done.length + i + 1}</span><span class="bt">${esc(st.text)}</span>
+        ${i === firstOpen ? '<span class="tag">current</span>' : ''}<button class="del" data-del="${i}" aria-label="Delete step">×</button></li>`).join('')
+  if (focusIdx != null) $(`.bubble[data-i="${focusIdx}"]`, el)?.focus()
+}
+
+function closeEditor(save) {
+  const ed = open.editing
+  if (save) {
+    const t = byId(open.id)
+    t.steps = [...ed.done, ...ed.list.filter((x) => x.text.trim())]
+    const cur = currentIdx(t)
+    open.view = cur >= 0 ? cur : Math.max(0, t.steps.length - 1)
+    open.banner = false
+    renderBoard()
+  }
+  const el = ed.el
+  open.editing = null
+  const finish = () => { el.remove(); if (save) renderModal() }
+  if (reduced()) return finish()
+  el.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateY(10px)' }], { duration: 160, easing: EASE, fill: 'forwards' }).finished.then(finish)
+}
+
+function editText(bubble) {
+  const bt = $('.bt', bubble), i = Number(bubble.dataset.i), before = open.editing.list[i].text
+  bt.setAttribute('contenteditable', 'plaintext-only')
+  bt.focus()
+  const range = document.createRange(); range.selectNodeContents(bt); range.collapse(false)
+  const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range)
+  bt.dataset.before = before
+  bt.addEventListener('blur', () => {
+    const text = bt.textContent.trim()
+    if (open?.editing) open.editing.list[i].text = text || before
+    bt.removeAttribute('contenteditable')
+    bt.textContent = text || before
+  }, { once: true })
+}
+
+// Hold-and-drag reorder with pointer events. A quick click renames instead.
+function wireEditor(ed) {
+  const list = $('#edList', ed)
+  list.addEventListener('pointerdown', (e) => {
+    const b = e.target.closest('.bubble:not(.locked)')
+    if (!b || e.button !== 0 || e.target.closest('.del')) return
+    if (e.target.closest('[contenteditable]')) return // already renaming: let the caret move
+    e.preventDefault()
+    const items = [...list.querySelectorAll('.bubble:not(.locked)')]
+    const from = items.indexOf(b)
+    const rects = items.map((el) => el.getBoundingClientRect())
+    const gap = items.length > 1 ? rects[1].top - rects[0].bottom : 8
+    const h = rects[from].height + gap
+    const startY = e.clientY
+    let dragging = false, to = from, lastY = startY
+    const lift = () => {
+      dragging = true
+      b.classList.add('lifted')
+      items.forEach((el) => el !== b && el.classList.add('shifting'))
+      b.style.transform = `translateY(${lastY - startY}px) scale(1.02)`
+    }
+    const hold = setTimeout(lift, 200)
+    list.setPointerCapture(e.pointerId)
+    const move = (ev) => {
+      lastY = ev.clientY
+      const dy = ev.clientY - startY
+      if (!dragging && Math.abs(dy) > 4) { clearTimeout(hold); lift() }
+      if (!dragging) return
+      b.style.transform = `translateY(${dy}px) scale(1.02)`
+      const center = rects[from].top + rects[from].height / 2 + dy
+      to = 0
+      rects.forEach((r, k) => { if (k !== from && center > r.top + r.height / 2) to++ })
+      items.forEach((el, k) => {
+        if (k === from) return
+        let shift = 0
+        if (from < to && k > from && k <= to) shift = -h
+        if (to < from && k >= to && k < from) shift = h
+        el.style.transform = shift ? `translateY(${shift}px)` : ''
+      })
+    }
+    const up = () => {
+      clearTimeout(hold)
+      list.removeEventListener('pointermove', move)
+      list.removeEventListener('pointerup', up)
+      list.removeEventListener('pointercancel', up)
+      if (!dragging) return editText(b)
+      const offset = to > from ? rects[to].bottom - rects[from].bottom : rects[to].top - rects[from].top
+      b.classList.add('settling')
+      b.style.transform = `translateY(${offset}px)`
+      setTimeout(() => {
+        const arr = open.editing.list
+        const [moved] = arr.splice(from, 1)
+        arr.splice(to, 0, moved)
+        renderEditor()
+      }, 160)
+    }
+    list.addEventListener('pointermove', move)
+    list.addEventListener('pointerup', up)
+    list.addEventListener('pointercancel', up)
+  })
+
+  list.addEventListener('keydown', (e) => {
+    const b = e.target.closest('.bubble:not(.locked)')
+    if (!b || e.target.closest('[contenteditable]')) return
+    const i = Number(b.dataset.i), arr = open.editing.list
+    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault()
+      const j = e.key === 'ArrowUp' ? i - 1 : i + 1
+      if (j < 0 || j >= arr.length) return
+      ;[arr[i], arr[j]] = [arr[j], arr[i]]
+      renderEditor(j)
+    } else if (e.key === 'Enter') {
+      e.preventDefault(); editText(b)
+    }
+  })
+
+  $('#edAdd', ed).addEventListener('submit', (e) => {
+    e.preventDefault()
+    const input = $('input', e.target), text = input.value.trim()
+    if (!text) return
+    open.editing.list.push(s(text))
+    input.value = ''
+    renderEditor()
+    const l = $('#edList', ed); l.scrollTop = l.scrollHeight
+  })
+}
+
+/* ---------- Modal events ---------- */
+document.addEventListener('click', (e) => {
+  if (!open) return
+  const t = byId(open.id), el = e.target.closest('button')
+  if (e.target.classList.contains('scrim')) return open.editing ? closeEditor(false) : closeModal()
+  if (!el || !open.root.contains(el)) return
+  if (el.dataset.ed) return closeEditor(el.dataset.ed === 'save')
+  if (el.dataset.del !== undefined) { open.editing.list.splice(Number(el.dataset.del), 1); return renderEditor() }
+  if (el.hasAttribute('data-close')) return closeModal()
+  if (el.hasAttribute('data-edit')) return openEditor()
+  if (el.dataset.status) {
+    const before = t.status, rect = el.getBoundingClientRect()
+    t.status = el.dataset.status; open.banner = false; renderBoard(); renderModal()
+    if (ORDER[t.status] > ORDER[before]) celebrate(rect, t.status === 'done' ? 'done' : 'move')
+    return
+  }
+  if (el.dataset.done !== undefined) {
+    celebrate(el.getBoundingClientRect(), 'step')
+    const { snap, moved } = completeStep(t, Number(el.dataset.done))
+    const next = currentIdx(t)
+    open.banner = next < 0
+    renderBoard(); renderModal()
+    if (next >= 0) requestAnimationFrame(() => stepsView === 'timeline' ? scrollTimelineToCurrent() : scrollToIndex(next, 'smooth'))
+    if (moved) showToast('Step done. Moved to In progress', snap)
+    return
+  }
+  if (el.dataset.undo !== undefined) {
+    const i = Number(el.dataset.undo)
+    t.steps[i].done = false; t.steps[i].at = null
+    open.banner = false
+    renderBoard(); return renderModal()
+  }
+  if (el.dataset.go) return scrollToIndex(Math.max(0, Math.min(t.steps.length - 1, open.view + Number(el.dataset.go))))
+  if (el.dataset.dot !== undefined) return scrollToIndex(Number(el.dataset.dot))
+  if (el.dataset.act === 'to-done') {
+    t.status = 'done'; open.banner = false; renderBoard(); renderModal()
+    // The prompt is gone now, so burst from the Done status that just lit up.
+    return celebrate($('#mStatus [data-status="done"]', open.root).getBoundingClientRect(), 'done')
+  }
+  if (el.dataset.act === 'dismiss') { open.banner = false; return renderModal() }
+})
+
+document.addEventListener('input', (e) => { if (open && e.target.id === 'mNote') byId(open.id).note = e.target.value })
+
+document.addEventListener('keydown', (e) => {
+  if (!open) return
+  const editing = e.target.closest?.('[contenteditable]')
+  if (editing) {
+    if (e.key === 'Enter') { e.preventDefault(); editing.blur() }
+    if (e.key === 'Escape') { e.preventDefault(); editing.textContent = editing.dataset.before; editing.blur() }
+    return
+  }
+  if (e.key === 'Escape') return open.editing ? closeEditor(false) : closeModal()
+  if (open.editing || stepsView !== 'stepper' || e.target.matches('input, textarea')) return
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    e.preventDefault()
+    const t = byId(open.id)
+    scrollToIndex(Math.max(0, Math.min(t.steps.length - 1, open.view + (e.key === 'ArrowRight' ? 1 : -1))))
+  }
+})
+
+/* ---------- Settings page ---------- */
+function showPage(name) {
+  if (open) return
+  document.querySelectorAll('.page').forEach((p) => { p.hidden = p.id !== `page-${name}` })
+  document.querySelectorAll('button.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.page === name))
+}
+document.querySelectorAll('button.nav-item').forEach((b) => b.addEventListener('click', () => showPage(b.dataset.page)))
+
+function syncSettingsUI() {
+  document.querySelectorAll('#setView .choice').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.view === stepsView)))
+  document.querySelectorAll('#setFx .choice').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.fx === fxStyle)))
+  const secs = fxDur / 1000
+  $('#durRange').value = secs
+  $('#durOut').textContent = `${secs.toFixed(1)}s`
+  $('#durRange').disabled = fxStyle === 'off'
+  $('#durControl').classList.toggle('off', fxStyle === 'off')
+}
+
+function setStepsView(v) {
+  stepsView = v
+  saveSettings(); syncSettingsUI()
+  if (open) {
+    const cur = currentIdx(byId(open.id))
+    if (cur >= 0) open.view = cur
+    $('#mSteps', open.root).innerHTML = '' // fresh render: lands on the current step
+    renderModal()
+  }
+}
+
+function previewFx() {
+  const card = $('#previewCard')
+  if (card.offsetParent === null) return // settings page not visible
+  bump(card)
+  celebrate(card.getBoundingClientRect(), 'done', { around: true })
+}
+
+// Roving radio groups: click, or arrow keys inside the group.
+function wireRadios(id, attr, onPick) {
+  const group = $(id)
+  group.addEventListener('click', (e) => { const b = e.target.closest('.choice'); if (b) onPick(b.dataset[attr]) })
+  group.addEventListener('keydown', (e) => {
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return
+    e.preventDefault()
+    const items = [...group.querySelectorAll('.choice')]
+    const i = items.findIndex((b) => b.getAttribute('aria-checked') === 'true')
+    const next = items[(i + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]
+    next.focus(); onPick(next.dataset[attr])
+  })
+}
+wireRadios('#setView', 'view', setStepsView)
+wireRadios('#setFx', 'fx', (v) => { fxStyle = v; saveSettings(); syncSettingsUI(); previewFx() })
+
+const durRange = $('#durRange')
+durRange.addEventListener('input', () => {
+  fxDur = Math.round(Number(durRange.value) * 1000)
+  $('#durOut').textContent = `${Number(durRange.value).toFixed(1)}s`
+})
+durRange.addEventListener('change', () => { saveSettings(); previewFx() })
+$('#previewBtn').addEventListener('click', previewFx)
+
+const darkToggle = $('#darkToggle')
+function syncTheme() {
+  const dark = document.documentElement.dataset.theme === 'dark'
+  darkToggle.checked = dark
+  $('#themeIcon').textContent = dark ? '🌙' : '☀️'
+}
+darkToggle.addEventListener('change', () => { document.documentElement.dataset.theme = darkToggle.checked ? 'dark' : 'light'; syncTheme() })
+
+document.querySelector('.fx-demo').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-demo]'); if (!b) return
+  const card = $('#demoCard')
+  if (b.dataset.demo === 'step') return celebrate(b.getBoundingClientRect(), 'step')
+  if (b.dataset.demo === 'ring') return celebrate(card.getBoundingClientRect(), 'step', { around: true })
+  bump(card)
+  celebrate(card.getBoundingClientRect(), b.dataset.demo, { around: true })
+})
+
+$('#reset').addEventListener('click', () => {
+  if (open) { open.root.remove(); open = null }
+  hideToast()
+  tasks = structuredClone(INITIAL); renderBoard()
+})
+syncTheme()
+syncSettingsUI()
+renderBoard()
+</script>
+</body>
+</html>

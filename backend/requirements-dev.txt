@@ -1,0 +1,3 @@
+# Test-only dependencies (REC-30 test suite). Install on top of requirements.txt:
+#   pip install -r requirements.txt -r requirements-dev.txt
+pytest==8.4.2

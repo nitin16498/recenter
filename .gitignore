@@ -19,3 +19,8 @@ venv/
 .DS_Store
 .idea/
 .vscode/
+
+# Test output
+.pytest_cache/
+frontend/test-results/
+frontend/playwright-report/

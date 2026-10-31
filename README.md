@@ -223,9 +223,12 @@ scripts/test.sh --quick   # skip the browser tests, ~3s, for quick iteration
   the other two pass). If the browser tests fail, the Playwright report is
   attached to the run as an artifact. Check results from the terminal with
   `gh run list` / `gh run view --log-failed`.
-- *Blocking merges:* not set up, because branch protection on a private repo
-  needs GitHub Pro. If the repo moves to Pro, require the three Regression
-  checks on `main` (Settings → Branches).
+- *Blocking merges:* `main` is protected. A merge needs all three Regression
+  checks green ("Backend tests", "Frontend unit tests + build", "Browser
+  tests"). Force-pushes and deleting `main` are blocked.
+
+> The repo is **public**. Never commit `backend/.env`, `*.db` files or keys.
+> They're gitignored, so keep it that way.
 
 **Running pieces on their own:**
 

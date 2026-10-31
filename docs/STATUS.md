@@ -105,11 +105,14 @@ work.
   41244123111, 2026-10-31) was all green: backend, frontend, and browser tests
   in about 3 minutes. `gh` is now installed and logged in as nitin16498, so
   Claude Code can read CI results (`gh run list`, `gh run view --log-failed`).
-- **Merge-blocking on `main` is not set up.** GitHub only allows branch
-  protection on private repos with GitHub Pro (or on public repos). Until
-  then, the pre-push hook is the gate. To turn it on later: Settings →
-  Branches → rule for `main` → require the checks "Backend tests", "Frontend
-  unit tests + build" and "Browser tests".
+- **`main` is protected (2026-10-31).** Nitin made the repo public, which
+  allows branch protection on the free plan. Merging into `main` now requires
+  the three Regression checks to pass: "Backend tests", "Frontend unit tests +
+  build" and "Browser tests". Force-pushes and branch deletion are blocked.
+  Admins (Nitin) can still override in an emergency.
+- **Before going public, git history was scanned for secrets.** No `.env` or
+  `*.db` files were ever committed, and there are no API-key patterns. Keep
+  it that way: secrets only in `backend/.env`.
 - **Not covered by automated tests:** how the celebrations look (only that
   they start and clean up) and touch gestures (Chromium desktop only).
 

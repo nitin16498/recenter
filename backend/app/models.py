@@ -9,7 +9,8 @@ Design decisions this encodes (from planning sessions):
   HabitOccurrence (the actual checkable item / "vote"). Check-ins read and
   resolve occurrences; stats aggregate over them.
 - Epic (life area) -> Story (objective with a definition of done) -> Task
-  (one sitting, has a first physical action).
+  (one sitting) -> TaskStep (ordered physical actions; the first one not done
+  is the task's current step). REC-30 replaced the single `first_action`.
 - Messages are stored for UI history; the agent reads a recent window only.
 - MemoryFact holds distilled facts extracted from conversations (not RAG
   over raw chat). `embedding` stays NULL until semantic lookup is needed.
@@ -142,7 +143,7 @@ class Story(Base):
 
 
 class Task(Base):
-    """One-sitting unit of work with a first physical action.
+    """One-sitting unit of work, broken into ordered steps (REC-30).
 
     The one-sitting rule: if it can't be finished in the sitting you start it,
     the planner should break it down further.
@@ -153,7 +154,6 @@ class Task(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     story_id: Mapped[int | None] = mapped_column(ForeignKey("stories.id"))
     title: Mapped[str] = mapped_column(String(200))
-    first_action: Mapped[str | None] = mapped_column(String(300))
     est_minutes: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[TaskStatus] = mapped_column(Enum(TaskStatus), default=TaskStatus.todo)
     order_in_story: Mapped[int | None] = mapped_column(Integer)  # backwards-planned sequence
@@ -163,6 +163,27 @@ class Task(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     story: Mapped[Story | None] = relationship(back_populates="tasks")
+    steps: Mapped[list["TaskStep"]] = relationship(
+        back_populates="task", order_by="TaskStep.position", cascade="all, delete-orphan"
+    )
+
+
+class TaskStep(Base):
+    """One physical action within a task (REC-30), ordered by `position`.
+
+    The task's current step is the first one without `done_at`. Collapsed
+    cards label it First / Next / Last action by where it sits in the list.
+    """
+
+    __tablename__ = "task_steps"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"), index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    text: Mapped[str] = mapped_column(String(300))
+    done_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+    task: Mapped[Task] = relationship(back_populates="steps")
 
 
 class Message(Base):

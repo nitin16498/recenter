@@ -1,6 +1,6 @@
 """Seed sample data (REC-7). Run: python -m app.seed"""
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from app.db import SessionLocal, init_db
 from app.models import (
@@ -14,8 +14,20 @@ from app.models import (
     Story,
     Task,
     TaskStatus,
+    TaskStep,
     TriggerSlot,
 )
+
+
+def steps(*items: str | tuple[str, int]) -> list[TaskStep]:
+    """Build ordered steps. A (text, minutes_ago) tuple is a finished step."""
+    now = datetime.now(timezone.utc)
+    out = []
+    for i, item in enumerate(items):
+        text, ago = item if isinstance(item, tuple) else (item, None)
+        done_at = now - timedelta(minutes=ago) if ago is not None else None
+        out.append(TaskStep(position=i, text=text, done_at=done_at))
+    return out
 
 
 def seed() -> None:
@@ -74,7 +86,7 @@ def seed() -> None:
             Task(
                 story_id=car.id,
                 title="Decide approach: windshield reflector vs full cover",
-                first_action="List pros/cons with the coach for 10 minutes",
+                steps=steps("List pros/cons with the coach for 10 minutes", "Pick one and note why"),
                 est_minutes=15,
                 order_in_story=1,
                 status=TaskStatus.todo,
@@ -83,7 +95,7 @@ def seed() -> None:
             Task(
                 story_id=car.id,
                 title="Pick a product and order it",
-                first_action="Open the two links from research and compare reviews",
+                steps=steps("Open the two links from research", "Compare reviews side by side", "Order the winner"),
                 est_minutes=20,
                 order_in_story=2,
             ),
@@ -92,6 +104,8 @@ def seed() -> None:
 
     # REC-27: enough spread across epics/stories/statuses to exercise the Board
     # (filter chips, all three columns). Mirrors design/board-tab.html.
+    # REC-30: several tasks are mid-way through their steps (design/task-steps.html),
+    # including one paused back in To do with a step already done.
     projects = Epic(name="Projects")
     cooking = Epic(name="Cooking")
     db.add_all([projects, cooking])
@@ -122,7 +136,13 @@ def seed() -> None:
             Task(
                 story_id=medical.id,
                 title="Download insurance docs from employer portal",
-                first_action='Open the HR portal and search "insurance card"',
+                steps=steps(
+                    ("Log in to the HR portal", 26 * 60),
+                    ("Open Benefits → Documents", 26 * 60 - 8),
+                    "Download the insurance card PDF",
+                    "Download the coverage summary",
+                    'Save both to a "Medical" folder',
+                ),
                 est_minutes=10,
                 order_in_story=1,
                 status=TaskStatus.in_progress,
@@ -130,21 +150,30 @@ def seed() -> None:
             Task(
                 story_id=medical.id,
                 title="Find what your insurance covers & where",
-                first_action="Open the downloaded PDF to the coverage page",
+                steps=steps(
+                    ("Open the coverage summary PDF", 5 * 60),
+                    "Find the preventive-care section",
+                    "List two in-network clinics nearby",
+                ),
                 est_minutes=25,
                 order_in_story=2,
             ),
             Task(
                 story_id=medical.id,
                 title="Book the hospital appointment",
-                first_action="Call the clinic number from the insurance list",
+                status=TaskStatus.in_progress,
+                steps=steps(
+                    ("Find the clinic number on the insurance list", 3 * 60),
+                    ("Pick two time slots that work", 3 * 60 - 8),
+                    "Call the clinic and book one",
+                ),
                 est_minutes=15,
                 order_in_story=3,
             ),
             Task(
                 story_id=board.id,
                 title="Sketch the board layout",
-                first_action="Open the mockup and list the card types",
+                steps=steps(("Open the mockup", 3 * 24 * 60), ("List the card types", 3 * 24 * 60 - 15)),
                 est_minutes=20,
                 order_in_story=1,
                 status=TaskStatus.done,
@@ -153,7 +182,7 @@ def seed() -> None:
             Task(
                 story_id=recipe.id,
                 title="Pick this week's recipe",
-                first_action="Open the saved-recipes folder and choose one",
+                steps=steps("Open the saved-recipes folder", "Choose one and add ingredients to the list"),
                 est_minutes=10,
                 order_in_story=1,
             ),
@@ -177,7 +206,7 @@ def seed() -> None:
 
     db.commit()
     db.close()
-    print("Seeded: 2 identities, 2 habits, 1 occurrence, 3 epics, 4 stories, 7 tasks.")
+    print("Seeded: 2 identities, 2 habits, 1 occurrence, 3 epics, 4 stories, 7 tasks, 20 steps.")
 
 
 if __name__ == "__main__":

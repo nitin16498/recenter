@@ -7,6 +7,8 @@ Endpoints:
                        LangGraph supervisor lands in REC-9).
 - GET  /api/board    : tasks grouped by status + epic/story lists (REC-27).
 - PATCH /api/tasks/{id} : partial task update — drag status, detail panel edits.
+- POST /api/tasks/{id}/steps/{step_id}/complete|undo : tick a step (REC-30).
+- PUT  /api/tasks/{id}/steps : replace the open steps (step editor Save).
 """
 
 from dotenv import load_dotenv
@@ -15,10 +17,10 @@ load_dotenv()  # ANTHROPIC_API_KEY etc. from backend/.env — before agent impor
 
 from app.agent import run_agent
 from app.db import get_db, init_db
-from app.models import Epic, Message, Story, Task, TaskStatus, utcnow
+from app.models import Epic, Message, Story, Task, TaskStatus, TaskStep, utcnow
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, field_validator
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from starlette.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Recenter", version="0.1.0")
@@ -99,10 +101,17 @@ def chat(req: ChatRequest, db: Session = Depends(get_db)) -> MessageOut:
 # --- Board (REC-27) -------------------------------------------------------
 
 
+class StepOut(BaseModel):
+    id: int
+    position: int
+    text: str
+    done_at: str | None
+
+
 class TaskOut(BaseModel):
     id: int
     title: str
-    first_action: str | None
+    steps: list[StepOut]
     est_minutes: int | None
     status: TaskStatus
     note: str | None
@@ -116,7 +125,6 @@ class TaskPatch(BaseModel):
     """Only fields present in the request body are applied; null clears."""
 
     title: str | None = None
-    first_action: str | None = None
     est_minutes: int | None = None
     status: TaskStatus | None = None
     note: str | None = None
@@ -158,7 +166,15 @@ def task_out(t: Task) -> TaskOut:
     return TaskOut(
         id=t.id,
         title=t.title,
-        first_action=t.first_action,
+        steps=[
+            StepOut(
+                id=s.id,
+                position=s.position,
+                text=s.text,
+                done_at=s.done_at.isoformat() if s.done_at else None,
+            )
+            for s in t.steps
+        ],
         est_minutes=t.est_minutes,
         status=t.status,
         note=t.note,
@@ -173,7 +189,7 @@ def task_out(t: Task) -> TaskOut:
 def get_board(db: Session = Depends(get_db)) -> BoardOut:
     tasks = (
         db.query(Task)
-        .options(joinedload(Task.story).joinedload(Story.epic))
+        .options(joinedload(Task.story).joinedload(Story.epic), selectinload(Task.steps))
         .order_by(Task.story_id, Task.order_in_story, Task.id)
         .all()
     )
@@ -207,6 +223,97 @@ def patch_task(task_id: int, patch: TaskPatch, db: Session = Depends(get_db)) ->
 
     for field, value in changes.items():
         setattr(task, field, value)
+    db.commit()
+    db.refresh(task)
+    return task_out(task)
+
+
+# --- Task steps (REC-30) ---------------------------------------------------
+
+
+def get_task_step(db: Session, task_id: int, step_id: int) -> tuple[Task, TaskStep]:
+    task = db.get(Task, task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    step = next((s for s in task.steps if s.id == step_id), None)
+    if step is None:
+        raise HTTPException(status_code=404, detail="Step not found on this task")
+    return task, step
+
+
+@app.post("/api/tasks/{task_id}/steps/{step_id}/complete")
+def complete_step(task_id: int, step_id: int, db: Session = Depends(get_db)) -> TaskOut:
+    """Mark a step done. Finishing a step on a To do task starts it."""
+    task, step = get_task_step(db, task_id, step_id)
+    if step.done_at is None:
+        step.done_at = utcnow()
+    if task.status == TaskStatus.todo:
+        task.status = TaskStatus.in_progress
+    db.commit()
+    db.refresh(task)
+    return task_out(task)
+
+
+@app.post("/api/tasks/{task_id}/steps/{step_id}/undo")
+def undo_step(task_id: int, step_id: int, db: Session = Depends(get_db)) -> TaskOut:
+    """Mark a step not done. Task status is left alone (the client reverts it
+    explicitly when undoing an auto-start)."""
+    task, step = get_task_step(db, task_id, step_id)
+    step.done_at = None
+    db.commit()
+    db.refresh(task)
+    return task_out(task)
+
+
+class StepIn(BaseModel):
+    id: int | None = None  # existing step; omit for a new one
+    text: str
+
+    @field_validator("text")
+    @classmethod
+    def text_not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("step text cannot be blank")
+        return v.strip()
+
+
+class StepsReplace(BaseModel):
+    """The editor's Save: the open (not done) steps in their new order.
+
+    Finished steps are locked: they keep their order at the front and can't
+    be renamed, moved or deleted here. Open steps missing from the list are
+    deleted.
+    """
+
+    steps: list[StepIn]
+
+
+@app.put("/api/tasks/{task_id}/steps")
+def replace_steps(task_id: int, body: StepsReplace, db: Session = Depends(get_db)) -> TaskOut:
+    task = db.get(Task, task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    done = [s for s in task.steps if s.done_at is not None]
+    open_by_id = {s.id: s for s in task.steps if s.done_at is None}
+    ids = [s.id for s in body.steps if s.id is not None]
+    if len(ids) != len(set(ids)):
+        raise HTTPException(status_code=422, detail="duplicate step id")
+    unknown = [i for i in ids if i not in open_by_id]
+    if unknown:
+        raise HTTPException(status_code=422, detail=f"not an open step of this task: {unknown}")
+
+    ordered: list[TaskStep] = list(done)
+    for item in body.steps:
+        if item.id is not None:
+            step = open_by_id[item.id]
+            step.text = item.text
+        else:
+            step = TaskStep(text=item.text, position=0)
+        ordered.append(step)
+    for i, step in enumerate(ordered):
+        step.position = i
+    task.steps = ordered  # delete-orphan drops open steps left out of the list
     db.commit()
     db.refresh(task)
     return task_out(task)

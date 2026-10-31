@@ -8,6 +8,8 @@
 # Refreshed for REC-25 — now includes the agent stack (langgraph, langchain,
 # langchain-anthropic, langchain-openai) that requirements.txt declares as
 # ranges. The previous lock predated REC-9 and omitted all of it.
+# Refreshed 2026-10-31 (REC-30 test suite): adds pytest and its dependencies
+# from requirements-dev.txt.
 
 aiosqlite==0.22.1
 annotated-doc==0.0.5
@@ -37,6 +39,7 @@ httptools==0.8.0
 httpx==0.28.1
 httpx2==2.12.0
 idna==3.18
+iniconfig==2.3.1
 jiter==0.16.0
 jsonpatch==1.33
 jsonpointer==3.1.1
@@ -67,12 +70,15 @@ orjson==3.12.0
 ormsgpack==1.12.2
 packaging==26.3
 pathspec==1.1.1
+pluggy==1.7.0
 prometheus_client==0.26.0
 protobuf==6.33.6
 pycparser==3.0
 pydantic==2.13.4
 pydantic_core==2.46.4
+Pygments==2.21.0
 PyJWT==2.13.0
+pytest==8.4.2
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.3
 PyYAML==6.0.3

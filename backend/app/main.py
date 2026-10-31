@@ -9,7 +9,13 @@ Endpoints:
 - PATCH /api/tasks/{id} : partial task update — drag status, detail panel edits.
 - POST /api/tasks/{id}/steps/{step_id}/complete|undo : tick a step (REC-30).
 - PUT  /api/tasks/{id}/steps : replace the open steps (step editor Save).
+
+Testing mode (RECENTER_TESTING=1, used by the browser tests only): the agent
+returns a canned reply instead of calling a model, and POST /api/_test/reset
+wipes and re-seeds the database. Neither exists in normal runs.
 """
+
+import os
 
 from dotenv import load_dotenv
 
@@ -22,6 +28,14 @@ from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session, joinedload, selectinload
 from starlette.middleware.cors import CORSMiddleware
+
+TESTING = os.getenv("RECENTER_TESTING") == "1"
+
+if TESTING:
+
+    def run_agent(content: str, thread_id: str = "main") -> str:  # noqa: F811
+        return f"(test reply) {content}"
+
 
 app = FastAPI(title="Recenter", version="0.1.0")
 
@@ -317,3 +331,18 @@ def replace_steps(task_id: int, body: StepsReplace, db: Session = Depends(get_db
     db.commit()
     db.refresh(task)
     return task_out(task)
+
+
+# --- Testing only -----------------------------------------------------------
+
+if TESTING:
+
+    @app.post("/api/_test/reset")
+    def reset_for_tests() -> dict:
+        """Wipe and re-seed so each browser test starts from the same data."""
+        from app.db import Base, engine
+        from app.seed import seed
+
+        Base.metadata.drop_all(bind=engine)
+        seed()
+        return {"status": "reset"}

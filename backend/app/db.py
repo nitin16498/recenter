@@ -2,14 +2,18 @@
 
 Single-file SQLite DB for v1. Swapping to Postgres later means changing
 DATABASE_URL and nothing else. Run `python -m app.db` to create tables.
+Tests point RECENTER_DATABASE_URL at a throwaway file so they never touch
+recenter.db.
 (Alembic migrations come when the schema starts evolving; create_all is
 enough while there's one user and no production data.)
 """
 
+import os
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-DATABASE_URL = "sqlite:///./recenter.db"
+DATABASE_URL = os.getenv("RECENTER_DATABASE_URL", "sqlite:///./recenter.db")
 
 engine = create_engine(
     DATABASE_URL,
